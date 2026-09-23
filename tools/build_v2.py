@@ -6,7 +6,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 
 ROOT=Path(__file__).resolve().parents[1]; B=ROOT/'build'; OUT=ROOT/'dist'; OUT.mkdir(exist_ok=True)
-VERSION_CODE=54; VERSION_NAME='3.2.19'
+VERSION_CODE=55; VERSION_NAME='3.3.0'
 FIXED_ZIP_TIME=(2026,9,23,0,0,0)
 OCR=ROOT/'assets'/'ocr'/'ppocrv5_mobile_rec'
 ORT=ROOT/'third_party'/'onnxruntime'
@@ -53,7 +53,7 @@ RES={
 'authorities':0x01010018,'grantUriPermissions':0x0101001b,
 }
 strings=list(RES.keys())
-for s in ['', 'android',NS,'manifest','package','com.ayomi.infinitecanvas',VERSION_NAME,'uses-sdk','uses-permission','android.permission.READ_MEDIA_IMAGES','android.permission.READ_MEDIA_VISUAL_USER_SELECTED','android.permission.READ_EXTERNAL_STORAGE','android.permission.INTERNET','android.permission.REQUEST_INSTALL_PACKAGES','application','Vast','activity','android.app.NativeActivity','provider','com.ayomi.infinitecanvas.VastUpdateProvider','com.ayomi.infinitecanvas.updates','meta-data','android.app.lib_name','canvas','intent-filter','action','android.intent.action.MAIN','category','android.intent.category.LAUNCHER']:
+for s in ['', 'android',NS,'manifest','package','com.ayomi.infinitecanvas',VERSION_NAME,'uses-sdk','uses-permission','android.permission.READ_MEDIA_IMAGES','android.permission.READ_MEDIA_VISUAL_USER_SELECTED','android.permission.READ_EXTERNAL_STORAGE','android.permission.INTERNET','android.permission.REQUEST_INSTALL_PACKAGES','application','Vast','activity','android.app.NativeActivity','com.ayomi.infinitecanvas.VastFileActivity','provider','com.ayomi.infinitecanvas.VastUpdateProvider','com.ayomi.infinitecanvas.updates','meta-data','android.app.lib_name','canvas','intent-filter','action','android.intent.action.MAIN','category','android.intent.category.LAUNCHER']:
     if s not in strings: strings.append(s)
 idx={s:i for i,s in enumerate(strings)}
 u16=lambda v:struct.pack('<H',v&0xffff); u32=lambda v:struct.pack('<I',v&0xffffffff); u64=lambda v:struct.pack('<Q',v)
@@ -97,8 +97,9 @@ c.append(start('application',[(NS,'label',sval('Vast')),(NS,'icon',rval(0x010800
 c.append(start('activity',[(NS,'name',sval('android.app.NativeActivity')),(NS,'label',sval('Vast')),(NS,'exported',bval(True))],4))
 c.append(start('meta-data',[(NS,'name',sval('android.app.lib_name')),(NS,'value',sval('canvas'))],5));c.append(end('meta-data',5))
 c.append(start('intent-filter',[],6));c.append(start('action',[(NS,'name',sval('android.intent.action.MAIN'))],7));c.append(end('action',7));c.append(start('category',[(NS,'name',sval('android.intent.category.LAUNCHER'))],8));c.append(end('category',8));c.append(end('intent-filter',9));c.append(end('activity',10))
-c.append(start('provider',[(NS,'name',sval('com.ayomi.infinitecanvas.VastUpdateProvider')),(NS,'authorities',sval('com.ayomi.infinitecanvas.updates')),(NS,'exported',bval(False)),(NS,'grantUriPermissions',bval(True))],11));c.append(end('provider',11))
-c.append(end('application',12));c.append(end('manifest',13));c.append(nsend(13))
+c.append(start('activity',[(NS,'name',sval('com.ayomi.infinitecanvas.VastFileActivity')),(NS,'exported',bval(False))],11));c.append(end('activity',11))
+c.append(start('provider',[(NS,'name',sval('com.ayomi.infinitecanvas.VastUpdateProvider')),(NS,'authorities',sval('com.ayomi.infinitecanvas.updates')),(NS,'exported',bval(False)),(NS,'grantUriPermissions',bval(True))],12));c.append(end('provider',12))
+c.append(end('application',13));c.append(end('manifest',14));c.append(nsend(14))
 body=sp()+rmap()+b''.join(c); manifest=hdr(3,8,8+len(body))+body
 (B/'AndroidManifest-v2.xml').write_bytes(manifest)
 

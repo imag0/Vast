@@ -36,8 +36,8 @@ typedef struct ANativeActivityCallbacks {
    manager and silently disables every AAsset-backed subsystem. */
 struct ANativeActivity { ANativeActivityCallbacks* callbacks; JavaVM* vm; JNIEnv* env; jobject clazz; const char* internalDataPath; const char* externalDataPath; int32_t sdkVersion; void* instance; AAssetManager* assetManager; const char* obbPath; };
 
-extern void* malloc(size_t); extern void* realloc(void*, size_t); extern void free(void*); extern void* memset(void*, int, size_t); extern void* memcpy(void*, const void*, size_t);
-extern int snprintf(char*, size_t, const char*, ...); extern void* fopen(const char*, const char*); extern size_t fread(void*, size_t, size_t, void*); extern size_t fwrite(const void*, size_t, size_t, void*); extern int ferror(void*); extern int fflush(void*); extern int fclose(void*); extern int fileno(void*); extern int fsync(int); extern long syscall(long,...); extern int open(const char*,int,...); extern int rename(const char*,const char*); extern int remove(const char*);
+extern void* malloc(size_t); extern void* realloc(void*, size_t); extern void free(void*); extern void* memset(void*, int, size_t); extern void* memcpy(void*, const void*, size_t); extern int memcmp(const void*,const void*,size_t);
+extern int snprintf(char*, size_t, const char*, ...); extern void* fopen(const char*, const char*); extern size_t fread(void*, size_t, size_t, void*); extern size_t fwrite(const void*, size_t, size_t, void*); extern int ferror(void*); extern int fflush(void*); extern int fclose(void*); extern int fileno(void*); extern int fsync(int); extern long syscall(long,...); extern int open(const char*,int,...); extern int rename(const char*,const char*); extern int remove(const char*); extern int fseek(void*,long,int); extern long ftell(void*); extern int link(const char*,const char*); extern int mkdir(const char*,unsigned int);
 extern float sqrtf(float); extern float floorf(float); extern float ceilf(float); extern float fabsf(float); extern float atan2f(float,float); extern float sinf(float); extern float cosf(float); extern float expf(float);
 extern long read(int, void*, size_t); extern int close(int); extern int timerfd_create(int,int);
 typedef long time_t; typedef struct { time_t tv_sec; long tv_nsec; } timespec_t; typedef struct { timespec_t it_interval; timespec_t it_value; } itimerspec_t; extern int timerfd_settime(int,int,const itimerspec_t*,itimerspec_t*); extern int clock_gettime(int,timespec_t*);
@@ -85,6 +85,10 @@ extern int32_t AMotionEvent_getButtonState(const AInputEvent*); extern int64_t A
 #define FORMAT_RGB565 4
 #define FORMAT_RGBA_LAYER 99
 #define PI 3.14159265358979323846f
+#define MAX_PROJECTS 64
+#define PROJECT_SNAPSHOT_COUNT 10
+#define SEEK_SET_LOCAL 0
+#define SEEK_END_LOCAL 2
 
 // ---------- Core model ----------
 typedef OcrPoint Point;
@@ -150,11 +154,11 @@ typedef struct {
     int visNotes,visShapes; int lockInk,lockMarker,lockPhotos,lockCAD,lockNotes,lockShapes,lockFrames;
     int editorOpen,editorMode,editorTarget,editorLen,editorCreated,systemImeActive; char editorBuf[NOTE_TEXT_CAP],editorOriginal[NOTE_TEXT_CAP]; jobject systemEdit;
     char searchQuery[64]; int searchLen; ObjRef searchVisible[6]; int searchVisibleN;
-    int projectIndex; char workspacePath[512],projectPrefsPath[512]; char projectNames[4][32];
+    int projectIndex; char workspacePath[512],projectPrefsPath[512]; char projectNames[MAX_PROJECTS][32],projectTags[MAX_PROJECTS][64]; uint8_t projectFavorite[MAX_PROJECTS],projectArchived[MAX_PROJECTS],projectSnapshotCursor[MAX_PROJECTS]; int64_t projectLastSnapshotMs[MAX_PROJECTS];
     int64_t strokeLastMoveMs,strokeStartMs;
     int galleryOpen,galleryPage,galleryLoadedPage,mediaCount; int64_t mediaIds[96]; Thumb thumbs[12]; int thumbN; int mediaPermissionPending; int minimap; int railOpen,railTimerFd; int calibrationOpen; char calibText[24]; int calibLen; float calibValue;
     int animTimerFd; float railAnim,radialAnim,minimapAnim,railVel,radialVel,minimapVel; float lodSmoothPx,lodMotionMix; int minimapDirty,mapRenderMode,uiAnimating; uint32_t* minimapCache; int minimapCacheW,minimapCacheH; float minimapMinX,minimapMinY,minimapMaxX,minimapMaxY;
-    int atmosphere,gridStyle,gridDepth,edgeGlass,planeElevation,regionGlow,motionStyle,farZoomMode,performanceMode; float motionIntensity; int gpuActive;
+    int atmosphere,gridStyle,gridDepth,edgeGlass,planeElevation,regionGlow,motionStyle,farZoomMode,performanceMode,leftHanded; float motionIntensity; int gpuActive;
     int hoverActive; float hoverX,hoverY;
     char savePath[512]; char metaPath[512];
     OcrManager* ocr; int ocrEnabled,ocrInitFailed,ocrInitialCursor,ocrInitialPending,ocrEventRegistered;
@@ -185,6 +189,12 @@ static int selection_bounds(float*,float*,float*,float*);
 static int remap_object_refs(int,const int*,int);
 static void sanitize_group_refs(void);
 static int save_all_document(void);
+static void project_snapshot_maybe(int);
+static int project_request_export(void);
+static void project_request_import(void);
+static int project_restore_latest(void);
+static int project_create_new(void);
+static void project_check_pending_import(void);
 static void draw_wrapped_text(Surf*,int,int,int,const char*,int,uint32_t,int);
 static void draw_canvas_world(Surf*);
 static const char* search_result_label(ObjRef,char*,int);
@@ -227,7 +237,7 @@ static int atomic_write_finish(void*f,const char*tmp,const char*path,int ok){
    calls return.  The mutable canvas Stroke array therefore never crosses the
    thread boundary. */
 typedef struct { char magic[4]; int32_t enabled; } OcrPrefs;
-static void ocr_project_path_for(int idx,char*out,int cap){if(!out||cap<=0)return;out[0]=0;if(!G.activity||!G.activity->internalDataPath)return;idx=maxi(0,mini(3,idx));if(idx==0)snprintf(out,(size_t)cap,"%s/canvas.vastocr",G.activity->internalDataPath);else snprintf(out,(size_t)cap,"%s/canvas_%d.vastocr",G.activity->internalDataPath,idx);}
+static void ocr_project_path_for(int idx,char*out,int cap){if(!out||cap<=0)return;out[0]=0;if(!G.activity||!G.activity->internalDataPath)return;idx=maxi(0,mini(MAX_PROJECTS-1,idx));if(idx==0)snprintf(out,(size_t)cap,"%s/canvas.vastocr",G.activity->internalDataPath);else snprintf(out,(size_t)cap,"%s/canvas_%d.vastocr",G.activity->internalDataPath,idx);}
 static void ocr_load_prefs(void){G.ocrEnabled=1;if(!G.ocrPrefsPath[0])return;void*f=fopen(G.ocrPrefsPath,"rb");if(!f)return;OcrPrefs p;if(fread(&p,sizeof(p),1,f)==1&&p.magic[0]=='V'&&p.magic[1]=='O'&&p.magic[2]=='P'&&p.magic[3]=='1')G.ocrEnabled=p.enabled?1:0;fclose(f);}
 static void ocr_save_prefs(void){if(!G.ocrPrefsPath[0])return;char tmp[544];void*f=atomic_write_begin(G.ocrPrefsPath,tmp,sizeof(tmp));if(!f)return;OcrPrefs p={{'V','O','P','1'},G.ocrEnabled};int ok=fwrite(&p,sizeof(p),1,f)==1;(void)atomic_write_finish(f,tmp,G.ocrPrefsPath,ok);}
 static void ocr_fill_stroke(int index,OcrI64 completed,OcrManagerStroke*out){Stroke*s;if(!out){return;}memset(out,0,sizeof(*out));if(index<0||index>=G.strokeN)return;s=&G.strokes[index];out->runtime_index=index;out->points=s->pts;out->point_count=s->n>0?(OcrU32)s->n:0;out->base_width=s->baseWidth;out->completed_ms=completed;out->active=s->active?1u:0u;}
@@ -675,13 +685,14 @@ static void load_workspace(void){
     if(h.scale>=0.05f&&h.scale<=20.0f){G.scale=h.scale;G.offX=h.offX;G.offY=h.offY;G.viewInitialized=1;}
     fclose(f);
 }
-typedef struct { char magic[4]; int32_t lastIndex; char names[4][32]; } ProjectPrefs;
-static void save_project_prefs(void){if(!G.projectPrefsPath[0])return;char tmp[544];void*f=atomic_write_begin(G.projectPrefsPath,tmp,sizeof(tmp));if(!f)return;ProjectPrefs p;memset(&p,0,sizeof(p));p.magic[0]='V';p.magic[1]='P';p.magic[2]='R';p.magic[3]='1';p.lastIndex=G.projectIndex;for(int i=0;i<4;i++)memcpy(p.names[i],G.projectNames[i],32);int ok=fwrite(&p,sizeof(p),1,f)==1;(void)atomic_write_finish(f,tmp,G.projectPrefsPath,ok);}
-static void load_project_prefs(void){for(int i=0;i<4;i++)snprintf(G.projectNames[i],32,"Project %d",i+1);G.projectIndex=0;if(!G.projectPrefsPath[0])return;void*f=fopen(G.projectPrefsPath,"rb");if(!f)return;ProjectPrefs p;if(fread(&p,sizeof(p),1,f)==1&&p.magic[0]=='V'&&p.magic[1]=='P'&&p.magic[2]=='R'&&p.magic[3]=='1'){G.projectIndex=maxi(0,mini(3,p.lastIndex));for(int i=0;i<4;i++){memcpy(G.projectNames[i],p.names[i],32);G.projectNames[i][31]=0;if(!G.projectNames[i][0])snprintf(G.projectNames[i],32,"Project %d",i+1);}}fclose(f);}
-static void project_path_for(int idx,int kind,char*out,int cap){if(!out||cap<=0){return;}out[0]=0;if(!G.activity||!G.activity->internalDataPath)return;idx=maxi(0,mini(3,idx));const char*b=G.activity->internalDataPath;const char*base[6]={"canvas","canvas","images","frames","workspace","images"};const char*ext[6]={".icv",".meta",".icv",".vfr",".v3",".meta"};kind=maxi(0,mini(5,kind));if(idx==0){if(kind==0)snprintf(out,(size_t)cap,"%s/canvas.icv",b);else if(kind==1)snprintf(out,(size_t)cap,"%s/canvas.meta",b);else if(kind==2)snprintf(out,(size_t)cap,"%s/images.icv",b);else if(kind==3)snprintf(out,(size_t)cap,"%s/frames.vfr",b);else if(kind==4)snprintf(out,(size_t)cap,"%s/workspace.v3",b);else snprintf(out,(size_t)cap,"%s/images.meta",b);}else snprintf(out,(size_t)cap,"%s/%s_%d%s",b,base[kind],idx,ext[kind]);}
+typedef struct { char magic[4]; int32_t lastIndex; char names[4][32]; } ProjectPrefs1;
+typedef struct { char magic[4]; int32_t lastIndex; char names[MAX_PROJECTS][32]; char tags[MAX_PROJECTS][64]; uint8_t favorite[MAX_PROJECTS],archived[MAX_PROJECTS],snapshotCursor[MAX_PROJECTS],reserved[MAX_PROJECTS]; int32_t leftHanded; } ProjectPrefs2;
+static void save_project_prefs(void){if(!G.projectPrefsPath[0])return;char tmp[544];void*f=atomic_write_begin(G.projectPrefsPath,tmp,sizeof(tmp));if(!f)return;ProjectPrefs2 p;memset(&p,0,sizeof(p));memcpy(p.magic,"VPR2",4);p.lastIndex=G.projectIndex;p.leftHanded=G.leftHanded;for(int i=0;i<MAX_PROJECTS;i++){memcpy(p.names[i],G.projectNames[i],32);memcpy(p.tags[i],G.projectTags[i],64);p.favorite[i]=G.projectFavorite[i];p.archived[i]=G.projectArchived[i];p.snapshotCursor[i]=G.projectSnapshotCursor[i];}int ok=fwrite(&p,sizeof(p),1,f)==1;(void)atomic_write_finish(f,tmp,G.projectPrefsPath,ok);}
+static void load_project_prefs(void){for(int i=0;i<MAX_PROJECTS;i++)snprintf(G.projectNames[i],32,"Project %d",i+1);G.projectIndex=0;if(!G.projectPrefsPath[0])return;void*f=fopen(G.projectPrefsPath,"rb");if(!f)return;ProjectPrefs2 p2;memset(&p2,0,sizeof(p2));if(fread(&p2,sizeof(p2),1,f)==1&&memcmp(p2.magic,"VPR2",4)==0){G.projectIndex=maxi(0,mini(MAX_PROJECTS-1,p2.lastIndex));G.leftHanded=p2.leftHanded!=0;for(int i=0;i<MAX_PROJECTS;i++){memcpy(G.projectNames[i],p2.names[i],32);memcpy(G.projectTags[i],p2.tags[i],64);G.projectNames[i][31]=0;G.projectTags[i][63]=0;G.projectFavorite[i]=p2.favorite[i]!=0;G.projectArchived[i]=p2.archived[i]!=0;G.projectSnapshotCursor[i]=p2.snapshotCursor[i]%PROJECT_SNAPSHOT_COUNT;if(!G.projectNames[i][0])snprintf(G.projectNames[i],32,"Project %d",i+1);}}else{ProjectPrefs1 p1;memset(&p1,0,sizeof(p1));fseek(f,0,SEEK_SET_LOCAL);if(fread(&p1,sizeof(p1),1,f)==1&&memcmp(p1.magic,"VPR1",4)==0){G.projectIndex=maxi(0,mini(3,p1.lastIndex));for(int i=0;i<4;i++){memcpy(G.projectNames[i],p1.names[i],32);G.projectNames[i][31]=0;if(!G.projectNames[i][0])snprintf(G.projectNames[i],32,"Project %d",i+1);}}}fclose(f);}
+static void project_path_for(int idx,int kind,char*out,int cap){if(!out||cap<=0){return;}out[0]=0;if(!G.activity||!G.activity->internalDataPath)return;idx=maxi(0,mini(MAX_PROJECTS-1,idx));const char*b=G.activity->internalDataPath;const char*base[6]={"canvas","canvas","images","frames","workspace","images"};const char*ext[6]={".icv",".meta",".icv",".vfr",".v3",".meta"};kind=maxi(0,mini(5,kind));if(idx==0){if(kind==0)snprintf(out,(size_t)cap,"%s/canvas.icv",b);else if(kind==1)snprintf(out,(size_t)cap,"%s/canvas.meta",b);else if(kind==2)snprintf(out,(size_t)cap,"%s/images.icv",b);else if(kind==3)snprintf(out,(size_t)cap,"%s/frames.vfr",b);else if(kind==4)snprintf(out,(size_t)cap,"%s/workspace.v3",b);else snprintf(out,(size_t)cap,"%s/images.meta",b);}else snprintf(out,(size_t)cap,"%s/%s_%d%s",b,base[kind],idx,ext[kind]);}
 static int file_exists_local(const char*path){if(!path||!path[0])return 0;void*f=fopen(path,"rb");if(!f)return 0;fclose(f);return 1;}
 static int copy_file_local(const char*src,const char*dst){void*in=fopen(src,"rb");if(!in)return 0;void*out=fopen(dst,"wb");if(!out){fclose(in);return 0;}uint8_t*b=(uint8_t*)malloc(65536);if(!b){fclose(in);fclose(out);remove(dst);return 0;}int ok=1;for(;;){size_t n=fread(b,1,65536,in);if(n==0){if(ferror(in))ok=0;break;}if(fwrite(b,1,n,out)!=n){ok=0;break;}}free(b);if(fclose(in)!=0)ok=0;if(ok&&fflush(out)!=0)ok=0;if(ok){int fd=fileno(out);if(fd<0||fsync(fd)!=0)ok=0;}if(fclose(out)!=0)ok=0;if(!ok)remove(dst);return ok;}
-static void project_duplicate_marker_path(int idx,char*out,int cap){if(!out||cap<=0)return;out[0]=0;if(G.activity&&G.activity->internalDataPath)snprintf(out,(size_t)cap,"%s/project_%d.dup.pending",G.activity->internalDataPath,maxi(0,mini(3,idx)));}
+static void project_duplicate_marker_path(int idx,char*out,int cap){if(!out||cap<=0)return;out[0]=0;if(G.activity&&G.activity->internalDataPath)snprintf(out,(size_t)cap,"%s/project_%d.dup.pending",G.activity->internalDataPath,maxi(0,mini(MAX_PROJECTS-1,idx)));}
 static int remove_file_if_present(const char*path){if(!path||!path[0])return 0;if(remove(path)==0)return 1;return !file_exists_local(path);}
 static int project_recover_incomplete_duplicate(int idx){
     char marker[544];project_duplicate_marker_path(idx,marker,sizeof(marker));if(!file_exists_local(marker))return 1;int ok=1;
@@ -692,7 +703,7 @@ static int project_recover_incomplete_duplicate(int idx){
 }
 static int project_slot_has_data(int idx){if(!project_recover_incomplete_duplicate(idx))return 1;char p[512];for(int k=0;k<6;k++){project_path_for(idx,k,p,512);if(file_exists_local(p))return 1;}return 0;}
 static void set_project_paths(int idx){
-    if(!G.activity||!G.activity->internalDataPath)return;idx=maxi(0,mini(3,idx));G.projectIndex=idx;project_path_for(idx,0,G.savePath,sizeof(G.savePath));project_path_for(idx,1,G.metaPath,sizeof(G.metaPath));project_path_for(idx,2,G.imagePath,sizeof(G.imagePath));project_path_for(idx,3,G.framePath,sizeof(G.framePath));project_path_for(idx,4,G.workspacePath,sizeof(G.workspacePath));project_path_for(idx,5,G.imageMetaPath,sizeof(G.imageMetaPath));
+    if(!G.activity||!G.activity->internalDataPath)return;idx=maxi(0,mini(MAX_PROJECTS-1,idx));G.projectIndex=idx;project_path_for(idx,0,G.savePath,sizeof(G.savePath));project_path_for(idx,1,G.metaPath,sizeof(G.metaPath));project_path_for(idx,2,G.imagePath,sizeof(G.imagePath));project_path_for(idx,3,G.framePath,sizeof(G.framePath));project_path_for(idx,4,G.workspacePath,sizeof(G.workspacePath));project_path_for(idx,5,G.imageMetaPath,sizeof(G.imageMetaPath));
 }
 static void clear_document_memory(void){
     erase_index_reset();
@@ -709,7 +720,7 @@ static void clear_document_memory(void){
     G.visInk=G.visMarker=G.visPhotos=G.visCAD=G.visFrames=G.visNotes=G.visShapes=1;apply_workspace_locks(0);G.lastWriteValid=0;
     G.saveDirty=G.metaDirty=0;G.inkSavePending=G.workspaceSavePending=G.ocrPending=0;G.minimapDirty=1;G.viewInitialized=0;G.sceneRevision++;
 }
-static int save_all_document(void){ocr_pending_flush();int a=save_canvas(),b=save_meta(),c=save_images(),d=save_frames(),e=save_workspace();ocr_checkpoint();return a&&b&&c&&d&&e;}
+static int save_all_document(void){ocr_pending_flush();int a=save_canvas(),b=save_meta(),c=save_images(),d=save_frames(),e=save_workspace();ocr_checkpoint();int ok=a&&b&&c&&d&&e;if(ok)project_snapshot_maybe(0);return ok;}
 static void clear_current_project(void){
     clear_document_memory();G.tool=MODE_PEN;G.zenMode=0;G.railOpen=0;G.projectsPanel=0;reset_view();G.viewInitialized=1;
     G.saveDirty=G.metaDirty=G.imagesDirty=G.imagePixelsDirty=1;G.frameRevision++;G.sceneRevision++;G.minimapDirty=1;
@@ -722,7 +733,7 @@ static void switch_project(int idx){
     if(idx==G.projectIndex){G.projectsPanel=0;return;}if(!project_recover_incomplete_duplicate(idx)||!save_all_document()){set_toast(8,0);return;}ocr_close_current_project(0);clear_document_memory();set_project_paths(idx);load_canvas();load_meta();load_images();load_frames();load_workspace();ocr_open_current_project();if(!G.viewInitialized)reset_view();G.projectsPanel=0;G.minimapDirty=1;save_project_prefs();
 }
 static int duplicate_current_project(void){
-    if(!save_all_document())return -2;int dst=-1;for(int i=0;i<4;i++)if(i!=G.projectIndex&&!project_slot_has_data(i)){dst=i;break;}if(dst<0)return -1;
+    if(!save_all_document())return -2;int dst=-1;for(int i=0;i<MAX_PROJECTS;i++)if(i!=G.projectIndex&&!project_slot_has_data(i)){dst=i;break;}if(dst<0)return -1;
     char src[6][512],out[6][512],stage[6][544],marker[544],markerTmp[576];memset(stage,0,sizeof(stage));int present[6]={0,0,0,0,0,0},copied=0,marked=0;project_duplicate_marker_path(dst,marker,sizeof(marker));
     for(int k=0;k<6;k++){project_path_for(G.projectIndex,k,src[k],512);project_path_for(dst,k,out[k],512);int n=snprintf(stage[k],sizeof(stage[k]),"%s.dup",out[k]);if(n<=0||n>=(int)sizeof(stage[k]))goto fail;remove(stage[k]);if(file_exists_local(src[k])){present[k]=1;if(!copy_file_local(src[k],stage[k]))goto fail;copied=1;}}
     if(!copied)goto fail;
@@ -1359,6 +1370,7 @@ static void copy_text_local(char*dst,int cap,const char*src){
 static void copy_utf16_to_utf8(char*dst,int cap,const jchar*src,int len){int out=0;if(!dst||cap<=0)return;for(int i=0;src&&i<len&&out<cap-1;i++){uint32_t cp=src[i];if(cp>=0xd800&&cp<=0xdbff&&i+1<len&&src[i+1]>=0xdc00&&src[i+1]<=0xdfff){cp=0x10000u+((cp-0xd800u)<<10)+(src[++i]-0xdc00u);}else if(cp>=0xd800&&cp<=0xdfff)cp='?';unsigned char b[4];int n;if(cp<0x80){b[0]=(unsigned char)cp;n=1;}else if(cp<0x800){b[0]=(unsigned char)(0xc0|(cp>>6));b[1]=(unsigned char)(0x80|(cp&0x3f));n=2;}else if(cp<0x10000){b[0]=(unsigned char)(0xe0|(cp>>12));b[1]=(unsigned char)(0x80|((cp>>6)&0x3f));b[2]=(unsigned char)(0x80|(cp&0x3f));n=3;}else{b[0]=(unsigned char)(0xf0|(cp>>18));b[1]=(unsigned char)(0x80|((cp>>12)&0x3f));b[2]=(unsigned char)(0x80|((cp>>6)&0x3f));b[3]=(unsigned char)(0x80|(cp&0x3f));n=4;}if(out+n>cap-1)break;for(int k=0;k<n;k++)dst[out++]=(char)b[k];}dst[out]=0;}
 static int copy_utf8_to_utf16(jchar*out,int cap,const char*src){int in=0,n=0;if(!out||cap<=0)return 0;while(src&&src[in]&&n<cap){uint32_t cp=0;int used=utf8_decode_one((const unsigned char*)src+in,&cp);if(used<1){cp='?';used=1;}if(cp<=0xffff){out[n++]=(jchar)cp;}else{if(n+2>cap)break;cp-=0x10000u;out[n++]=(jchar)(0xd800u+(cp>>10));out[n++]=(jchar)(0xdc00u+(cp&0x3ff));}in+=used;}return n;}
 #include "android_ui_editor.inc"
+#include "project_safety.inc"
 #include "note_text.inc"
 static char upper_local(char c){if(c>='a'&&c<='z')return(char)(c-'a'+'A');return c;}
 static int contains_ci(const char*hay,const char*needle){if(!needle||!needle[0])return 1;for(int i=0;hay&&hay[i];i++){int j=0;while(needle[j]&&hay[i+j]&&upper_local(hay[i+j])==upper_local(needle[j]))j++;if(!needle[j])return 1;}return 0;}
@@ -1377,15 +1389,17 @@ static void editor_live_apply(void){
     if(G.editorMode==1&&G.editorTarget>=0&&G.editorTarget<G.noteN){if(!text_equal_local(G.notes[G.editorTarget].text,G.editorBuf)){copy_text_local(G.notes[G.editorTarget].text,NOTE_TEXT_CAP,G.editorBuf);note_autosize(&G.notes[G.editorTarget]);G.sceneRevision++;G.minimapDirty=1;}}
     else if(G.editorMode==2&&G.editorTarget>=0&&G.editorTarget<G.frameN){if(!text_equal_local(G.frameNames[G.editorTarget],G.editorBuf)){copy_text_local(G.frameNames[G.editorTarget],32,G.editorBuf);G.frameRevision++;G.sceneRevision++;G.minimapDirty=1;}}
     else if(G.editorMode==3){if(!text_equal_local(G.searchQuery,G.editorBuf)){copy_text_local(G.searchQuery,64,G.editorBuf);G.searchLen=str_len_local(G.searchQuery);}}
-    else if(G.editorMode==4&&G.editorTarget>=0&&G.editorTarget<4){if(!text_equal_local(G.projectNames[G.editorTarget],G.editorBuf))copy_text_local(G.projectNames[G.editorTarget],32,G.editorBuf);}
+    else if(G.editorMode==4&&G.editorTarget>=0&&G.editorTarget<MAX_PROJECTS){if(!text_equal_local(G.projectNames[G.editorTarget],G.editorBuf))copy_text_local(G.projectNames[G.editorTarget],32,G.editorBuf);}
     else if(G.editorMode==5&&G.editorTarget>=0&&G.editorTarget<G.bookmarkN){if(!text_equal_local(G.bookmarks[G.editorTarget].name,G.editorBuf)){copy_text_local(G.bookmarks[G.editorTarget].name,32,G.editorBuf);G.sceneRevision++;}}
+    else if(G.editorMode==7&&G.editorTarget>=0&&G.editorTarget<MAX_PROJECTS){if(!text_equal_local(G.projectTags[G.editorTarget],G.editorBuf))copy_text_local(G.projectTags[G.editorTarget],64,G.editorBuf);}
 }
 static void editor_restore_original(void){
     if(G.editorMode==1&&G.editorTarget>=0&&G.editorTarget<G.noteN){copy_text_local(G.notes[G.editorTarget].text,NOTE_TEXT_CAP,G.editorOriginal);note_autosize(&G.notes[G.editorTarget]);}
     else if(G.editorMode==2&&G.editorTarget>=0&&G.editorTarget<G.frameN){copy_text_local(G.frameNames[G.editorTarget],32,G.editorOriginal);G.frameRevision++;}
     else if(G.editorMode==3){copy_text_local(G.searchQuery,64,G.editorOriginal);G.searchLen=str_len_local(G.searchQuery);}
-    else if(G.editorMode==4&&G.editorTarget>=0&&G.editorTarget<4)copy_text_local(G.projectNames[G.editorTarget],32,G.editorOriginal);
+    else if(G.editorMode==4&&G.editorTarget>=0&&G.editorTarget<MAX_PROJECTS)copy_text_local(G.projectNames[G.editorTarget],32,G.editorOriginal);
     else if(G.editorMode==5&&G.editorTarget>=0&&G.editorTarget<G.bookmarkN)copy_text_local(G.bookmarks[G.editorTarget].name,32,G.editorOriginal);
+    else if(G.editorMode==7&&G.editorTarget>=0&&G.editorTarget<MAX_PROJECTS)copy_text_local(G.projectTags[G.editorTarget],64,G.editorOriginal);
     G.sceneRevision++;G.minimapDirty=1;
 }
 static void editor_cancel(void){
@@ -1394,7 +1408,7 @@ static void editor_cancel(void){
         for(int i=G.editorTarget+1;i<G.noteN;i++)G.notes[i-1]=G.notes[i];
         G.noteN--;if(G.noteN>=0)memset(&G.notes[G.noteN],0,sizeof(NoteObj));selection_clear();G.sceneRevision++;G.minimapDirty=1;save_workspace();
     }else editor_restore_original();
-    if(mode==1||mode==5)save_workspace();else if(mode==2)save_frames();else if(mode==4)save_project_prefs();
+    if(mode==1||mode==5)save_workspace();else if(mode==2)save_frames();else if(mode==4||mode==7)save_project_prefs();
     system_text_stop();G.editorOpen=0;G.editorMode=0;G.editorTarget=-1;G.editorLen=0;G.editorCreated=0;G.editorBuf[0]=0;G.editorOriginal[0]=0;
 }
 static void editor_open(int mode,int target,const char*initial){G.editorOpen=1;G.editorMode=mode;G.editorTarget=target;G.editorCreated=0;copy_text_local(G.editorBuf,NOTE_TEXT_CAP,initial?initial:"");copy_text_local(G.editorOriginal,NOTE_TEXT_CAP,initial?initial:"");G.editorLen=str_len_local(G.editorBuf);if(mode==2||mode==5){G.framePanel=1;G.addPanel=G.layersPanel=G.searchPanel=0;}system_text_start(G.editorBuf,mode);start_anim_timer();}
@@ -1403,8 +1417,9 @@ static void editor_apply(void){
     if(G.editorMode==1&&G.editorTarget>=0&&G.editorTarget<G.noteN){copy_text_local(G.notes[G.editorTarget].text,NOTE_TEXT_CAP,G.editorBuf);note_autosize(&G.notes[G.editorTarget]);G.sceneRevision++;save_workspace();}
     else if(G.editorMode==2&&G.editorTarget>=0&&G.editorTarget<G.frameN){copy_text_local(G.frameNames[G.editorTarget],32,G.editorBuf);G.sceneRevision++;if(!G.frameNames[G.editorTarget][0])snprintf(G.frameNames[G.editorTarget],32,"Frame %d",frame_default_name_count()+1);frame_compact_default_names();save_frames();}
     else if(G.editorMode==3){copy_text_local(G.searchQuery,64,G.editorBuf);G.searchLen=str_len_local(G.searchQuery);G.searchPanel=1;}
-    else if(G.editorMode==4&&G.editorTarget>=0&&G.editorTarget<4){copy_text_local(G.projectNames[G.editorTarget],32,G.editorBuf);if(!G.projectNames[G.editorTarget][0])snprintf(G.projectNames[G.editorTarget],32,"Project %d",G.editorTarget+1);save_project_prefs();G.projectsPanel=1;}
+    else if(G.editorMode==4&&G.editorTarget>=0&&G.editorTarget<MAX_PROJECTS){copy_text_local(G.projectNames[G.editorTarget],32,G.editorBuf);if(!G.projectNames[G.editorTarget][0])snprintf(G.projectNames[G.editorTarget],32,"Project %d",G.editorTarget+1);save_project_prefs();G.projectsPanel=1;}
     else if(G.editorMode==5&&G.editorTarget>=0&&G.editorTarget<G.bookmarkN){copy_text_local(G.bookmarks[G.editorTarget].name,32,G.editorBuf);if(!G.bookmarks[G.editorTarget].name[0])snprintf(G.bookmarks[G.editorTarget].name,32,"Place %d",G.bookmarks[G.editorTarget].id);save_workspace();G.framePanel=1;}
+    else if(G.editorMode==7&&G.editorTarget>=0&&G.editorTarget<MAX_PROJECTS){copy_text_local(G.projectTags[G.editorTarget],64,G.editorBuf);save_project_prefs();G.projectsPanel=1;}
     system_text_stop();G.editorOpen=0;G.editorMode=0;G.editorTarget=-1;G.editorLen=0;G.editorCreated=0;G.editorOriginal[0]=0;
 }
 static void editor_add_char(char c){if(G.editorLen>=94)return;G.editorBuf[G.editorLen++]=c;G.editorBuf[G.editorLen]=0;}
@@ -2254,7 +2269,7 @@ static void handle_motion(AInputEvent*e){
 
 
 static int input_cb(int fd,int events,void*data){(void)fd;(void)events;(void)data;if(!G.input)return 1;AInputEvent*e=0;int batch=0;INPUT_BATCH_ACTIVE=1;while(AInputQueue_getEvent(G.input,&e)>=0){if(AInputQueue_preDispatchEvent(G.input,e))continue;int handled=0;if(AInputEvent_getType(e)==AINPUT_EVENT_TYPE_MOTION){double begin=perf_us(),age=begin-(double)AMotionEvent_getEventTime(e)/1000;if(age>IP.maxAgeUs)IP.maxAgeUs=age;int action=AMotionEvent_getAction(e)&255;if(action==AMOTION_ACTION_DOWN||action==AMOTION_ACTION_MOVE||action==AMOTION_ACTION_UP){size_t count=AMotionEvent_getPointerCount(e);for(size_t j=0;j<count;j++)if(AMotionEvent_getToolType(e,j)==TOOL_STYLUS||AMotionEvent_getToolType(e,j)==TOOL_ERASER)IP.available+=AMotionEvent_getHistorySize(e)+1;}handle_motion(e);IP.inputUs+=perf_us()-begin;IP.events++;batch++;handled=1;}AInputQueue_finishEvent(G.input,e,handled);}if(batch>IP.maxBatch)IP.maxBatch=batch;INPUT_BATCH_ACTIVE=0;if(INPUT_FRAME_PENDING){INPUT_FRAME_PENDING=0;request_input_frame();}return 1;}
-static void cb_resume(ANativeActivity*a){(void)a;if(G.editorOpen&&G.systemImeActive)start_editor_poll_timer();if(G.mediaPermissionPending){G.mediaPermissionPending=0;if(photo_permission_granted()){if(query_media()>0){G.galleryPage=0;G.galleryOpen=1;load_gallery_page();G.toast=0;}else set_toast(5,0);}else set_toast(4,0);render();}}
+static void cb_resume(ANativeActivity*a){(void)a;project_check_pending_import();if(G.editorOpen&&G.systemImeActive)start_editor_poll_timer();if(G.mediaPermissionPending){G.mediaPermissionPending=0;if(photo_permission_granted()){if(query_media()>0){G.galleryPage=0;G.galleryOpen=1;load_gallery_page();G.toast=0;}else set_toast(5,0);}else set_toast(4,0);render();}}
 static void cb_window_created(ANativeActivity*a,ANativeWindow*w){(void)a;G.window=w;AUI_PANEL_HASH=AUI_CHROME_HASH=AUI_COLOR_HASH=0;if(G.editorOpen)system_text_start(G.editorBuf,G.editorMode);else if(G.calibrationOpen)system_text_start(G.calibText,6);if(G.editorOpen&&G.systemImeActive)start_editor_poll_timer();else if(G.ocrInitialPending||G.uiAnimating||G.toast)start_anim_timer();render();}
 static void cb_window_resized(ANativeActivity*a,ANativeWindow*w){(void)a;G.window=w;G.minimapDirty=1;render();}
 static void cb_window_redraw(ANativeActivity*a,ANativeWindow*w){(void)a;G.window=w;render();}

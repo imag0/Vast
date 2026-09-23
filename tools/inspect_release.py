@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APK = ROOT / "dist" / "Vast-v3.2.19.apk"
+APK = ROOT / "dist" / "Vast-v3.3.0.apk"
 BASELINE = ROOT / "artifacts" / "baseline" / "Vast-v3.2.7-baseline.apk"
 BASELINE_SIZE = 173264
 CERT = ROOT / "build" / "v2-cert.der"
@@ -218,8 +218,8 @@ def main():
 
     expected = {
         "package": "com.ayomi.infinitecanvas",
-        "versionCode": 54,
-        "versionName": "3.2.19",
+        "versionCode": 55,
+        "versionName": "3.3.0",
         "minSdkVersion": 26,
         "targetSdkVersion": 36,
     }
@@ -245,6 +245,10 @@ def main():
     provider = next((attrs for name, attrs in tags if name == "provider"), None)
     if not provider or provider.get("name") != "com.ayomi.infinitecanvas.VastUpdateProvider" or provider.get("authorities") != "com.ayomi.infinitecanvas.updates" or provider.get("exported") is not False or provider.get("grantUriPermissions") is not True:
         raise ValueError("APK update provider is missing or unsafe")
+    activities = [attrs for name, attrs in tags if name == "activity"]
+    file_activity = next((attrs for attrs in activities if attrs.get("name") == "com.ayomi.infinitecanvas.VastFileActivity"), None)
+    if not file_activity or file_activity.get("exported") is not False:
+        raise ValueError("APK project file bridge is missing or externally exposed")
 
     abis = sorted({name.split("/")[1] for name in names if name.startswith("lib/")})
     if abis != ["arm64-v8a"]:

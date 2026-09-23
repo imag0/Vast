@@ -74,12 +74,14 @@ public final class VastUi {
     private static PopupWindow header, identity, rail, contextTools, toolPanel;
     private static String chromeKey="";
     private static int chromeBackground;
+    private static boolean chromeLeftHanded;
     private static native void nativeText(String value);
     private static native void nativeAction(int action);
     private static native void nativeCancel();
     private static native void nativeUnit(int unit);
     private static native void nativeColor(int color);
     private static native int[] nativeThumbnail(int index);
+    public static void launchFileTransfer(Activity owner,int mode,String source,String name,String pending){VastFileActivity.launch(owner,mode,source,name,pending);}
     private static android.os.ParcelFileDescriptor photoDescriptor;
     private static android.graphics.BitmapRegionDecoder photoDecoder;
     private static long photoDecoderId=-1;
@@ -170,14 +172,14 @@ public final class VastUi {
         int id=row.optInt("id");
         if(id==5400&&owner!=null){VastUpdater.check(owner,background,true);return;}
         if(!row.optString("kind").equals("danger")){nativeAction(id);return;}
-        boolean clear=row.optString("text").toLowerCase(java.util.Locale.ROOT).startsWith("clear");
+        String dangerText=row.optString("text").toLowerCase(java.util.Locale.ROOT);boolean clear=dangerText.startsWith("clear"),restore=dangerText.startsWith("restore");
         AlertDialog confirm=new AlertDialog.Builder(c).setCustomTitle(VastStyle.title(c,row.optString("text")+"?",background))
-            .setMessage(clear?"This removes all content from the current project and cannot be undone.":"This action cannot be undone.").setNegativeButton("Cancel",null)
-            .setPositiveButton(clear?"Clear":"Delete",(d,which)->nativeAction(id)).create();
+            .setMessage(clear?"This removes all content from the current project and cannot be undone.":restore?"This replaces the current project with its latest recovery snapshot. Current unsaved changes will be lost.":"This action cannot be undone.").setNegativeButton("Cancel",null)
+            .setPositiveButton(clear?"Clear":restore?"Restore":"Delete",(d,which)->nativeAction(id)).create();
         confirm.show();if(owner!=null)sizeDialog(confirm,owner,420,background);
     }
     private static void styleButton(Button b,int background){VastStyle.button(b,background);}
-    private static void dismissChrome(){PopupWindow h=header,i=identity,r=rail,c=contextTools,t=toolPanel;header=identity=rail=contextTools=toolPanel=null;exit(h,MOTION_UP);exit(i,MOTION_UP);exit(r,MOTION_LEFT);exit(c,MOTION_DOWN);exit(t,MOTION_RIGHT);}
+    private static void dismissChrome(){PopupWindow h=header,i=identity,r=rail,c=contextTools,t=toolPanel;header=identity=rail=contextTools=toolPanel=null;exit(h,MOTION_UP);exit(i,MOTION_UP);exit(r,chromeLeftHanded?MOTION_RIGHT:MOTION_LEFT);exit(c,MOTION_DOWN);exit(t,chromeLeftHanded?MOTION_LEFT:MOTION_RIGHT);}
     private static LinearLayout actionBar(Context c,JSONArray rows,int background,boolean vertical,boolean compact,boolean shortBar)throws Exception{
         LinearLayout bar=new LinearLayout(c);bar.setOrientation(vertical?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(c,6),dp(c,6),dp(c,6),dp(c,6));bar.setBackground(VastStyle.glass(c,background,vertical?26:38,false));
         for(int i=0;i<rows.length();i++){JSONObject row=rows.getJSONObject(i);int id=row.getInt("id");String title=row.getString("text");
@@ -212,7 +214,7 @@ public final class VastUi {
         if(json.equals(chromeKey)&&background==chromeBackground)return;chromeKey=json;chromeBackground=background;
         if(json.isEmpty()){dismissChrome();return;}
         try{
-            JSONObject state=new JSONObject(json);Context c=themed(a,background);owner=a;
+            JSONObject state=new JSONObject(json);Context c=themed(a,background);owner=a;boolean requestedLeftHanded=state.optBoolean("leftHanded");if(requestedLeftHanded!=chromeLeftHanded){PopupWindow oldRail=rail,oldTool=toolPanel;rail=toolPanel=null;exit(oldRail,chromeLeftHanded?MOTION_RIGHT:MOTION_LEFT);exit(oldTool,chromeLeftHanded?MOTION_LEFT:MOTION_RIGHT);chromeLeftHanded=requestedLeftHanded;}
             if(state.optBoolean("hidden")){dismissChrome();return;}
             // Keep project context, not canvas branding. This View survives
             // pen DOWN/UP and undo-state updates; its entrance never restarts.
@@ -223,9 +225,10 @@ public final class VastUi {
             header=syncBar(a,header,zen?null:state.optJSONArray("header"),background,false,Math.min(dp(c,420),screenWidth-dp(c,32)),dp(c,COMPACT_CHROME_DP),Gravity.TOP|Gravity.RIGHT,dp(c,16),dp(c,12),false,MOTION_UP);
             JSONArray context=state.optJSONArray("context");
             contextTools=syncBar(a,contextTools,zen?null:context,background,false,Math.min(dp(c,12+84*(context==null?0:context.length())),screenWidth-dp(c,32)),dp(c,74),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,dp(c,24),false,MOTION_DOWN);
-            toolPanel=syncBar(a,toolPanel,zen?null:state.optJSONArray("tool"),background,true,Math.min(dp(c,248),screenWidth-dp(c,32)),-2,Gravity.TOP|Gravity.RIGHT,dp(c,16),dp(c,12+COMPACT_CHROME_DP+16),false,MOTION_RIGHT);
+            boolean leftHanded=chromeLeftHanded;int toolGravity=Gravity.TOP|(leftHanded?Gravity.LEFT:Gravity.RIGHT);
+            toolPanel=syncBar(a,toolPanel,zen?null:state.optJSONArray("tool"),background,true,Math.min(dp(c,248),screenWidth-dp(c,32)),-2,toolGravity,dp(c,16),dp(c,12+COMPACT_CHROME_DP+16),false,leftHanded?MOTION_LEFT:MOTION_RIGHT);
             boolean expanded=state.optBoolean("rail");JSONArray tray=new JSONArray(state.optJSONArray("tools").toString());JSONObject handle=new JSONObject();handle.put("id",5300);handle.put("text",expanded?"Collapse":"Expand");tray.put(handle);
-            rail=syncBar(a,rail,zen?null:tray,background,true,dp(c,expanded?152:COMPACT_CHROME_DP),Math.min(dp(c,462),a.getResources().getDisplayMetrics().heightPixels-dp(c,170)),Gravity.CENTER_VERTICAL|Gravity.LEFT,dp(c,12),0,true,MOTION_LEFT);
+            rail=syncBar(a,rail,zen?null:tray,background,true,dp(c,expanded?152:COMPACT_CHROME_DP),Math.min(dp(c,462),a.getResources().getDisplayMetrics().heightPixels-dp(c,170)),Gravity.CENTER_VERTICAL|(leftHanded?Gravity.RIGHT:Gravity.LEFT),dp(c,12),0,true,leftHanded?MOTION_RIGHT:MOTION_LEFT);
         }catch(Exception ex){android.util.Log.e("VastUi","Unable to show canvas controls",ex);dismissChrome();}
     }
     private static PopupWindow colorPopup;
@@ -376,8 +379,8 @@ public final class VastUi {
         editor.setHorizontallyScrolling(mode!=1);
         editor.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI|(mode==1?EditorInfo.IME_FLAG_NO_ENTER_ACTION:
             mode==3?EditorInfo.IME_ACTION_SEARCH:EditorInfo.IME_ACTION_DONE));
-        String[] titles={"","Edit text","Rename frame","Search canvas","Rename project","Rename place","Calibrate dimension"};
-        editor.setHint(mode==3?"Search notes, places and handwriting":mode==6?"Real length":mode==1?"Write a note":"Name");
+        String[] titles={"","Edit text","Rename frame","Search canvas","Rename project","Rename place","Calibrate dimension","Edit project tags"};
+        editor.setHint(mode==3?"Search notes, places and handwriting":mode==6?"Real length":mode==7?"Tags separated by commas":mode==1?"Write a note":"Name");
         editor.setContentDescription(titles[mode]);
         // Respect the existing UTF-8 document capacity without breaking surrogate pairs or IME spans.
         editor.setFilters(new InputFilter[]{(source,start,end,dest,dstart,dend)->{

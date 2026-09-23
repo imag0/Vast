@@ -58,7 +58,7 @@ static int system_text_start(const char*initial,int mode){
     AUI_PANEL_HASH=0;
     if(mode==6)AUI_CALIB_UNIT=G.cadUnit;
     if(!android_ui_ready())return 0;JNIEnv*e=G.activity->env;
-    int limit=mode==1?(int)sizeof(G.editorBuf)-1:mode==3?63:mode==6?20:31;
+    int limit=mode==1?(int)sizeof(G.editorBuf)-1:(mode==3||mode==7)?63:mode==6?20:31;
     jmethodID m=(*e)->GetStaticMethodID(e,AUI,"showEditor","(Landroid/app/Activity;Ljava/lang/String;IIII)Z");
     jstring value=aui_string(e,initial?initial:"");
     G.systemImeActive=m&&value?(*e)->CallStaticBooleanMethod(e,AUI,m,G.activity->clazz,value,mode,limit,G.cadUnit,(jint)C_BG):0;
