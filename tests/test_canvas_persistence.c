@@ -98,6 +98,7 @@ static void test_latest_meta_settings_round_trip(void) {
     G.performanceMode = 0;
     G.photoAngleSnap = 0;
     G.cadUnit = 4;
+    G.theme = theme_preset_value(THEME_PRESET_COUNT - 1);
     G.measureN = 2;
     G.measures[0] = (Measure){1, 2, 3, 4, 1};
     G.measures[1] = (Measure){5, 6, 7, 8, 1};
@@ -108,6 +109,8 @@ static void test_latest_meta_settings_round_trip(void) {
     load_meta();
     check(G.performanceMode == 0, "latest meta retains performance mode");
     check(G.photoAngleSnap == 0, "latest meta retains photo angle snap");
+    check(theme_is_preset(THEME_PRESET_COUNT - 1),
+          "latest meta retains a newly curated theme");
     check(G.cadUnit == 4, "latest meta retains CAD unit");
     check(G.measureN == 2 && G.measures[1].bx == 7.0f,
           "latest meta retains complete measure payload");

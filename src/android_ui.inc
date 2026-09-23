@@ -96,7 +96,10 @@ static void android_ui_sync(void){
         }else if(G.settingsTab==3){aui_heading("Canvas");aui_step("Grid",grid_style_name(),UI_DISP0_MINUS,UI_DISP0_PLUS);
         aui_step("Zoomed-out view",far_zoom_name(),UI_DISP1_MINUS,UI_DISP1_PLUS);aui_heading("Advanced");aui_step("Rendering quality",perf_name(),UI_DISP2_MINUS,UI_DISP2_PLUS);aui_heading("Updates");aui_text_row("Vast checks the official imag0/Vast repository periodically. Every APK is checksum-verified and must match this app's signing certificate before Android can install it.");aui_button("Check for updates",5400);
         }else if(G.settingsTab==0){aui_heading("Appearance");aui_percent("Canvas controls",G.uiScale,UI_SCALE_MINUS,UI_SCALE_PLUS);
-        const char*themes[]={"Dark","OLED","Paper","Blue","Warm"};for(int i=0;i<5;i++)aui_row("choice",themes[i],UI_PRESET0+i,theme_is_preset(i),1);
+        aui_heading("Essentials");for(int i=0;i<5;i++)aui_row("choice",theme_preset_name(i),UI_PRESET0+i,theme_is_preset(i),1);
+        aui_heading("Dark collection");for(int i=5;i<12;i++)aui_row("choice",theme_preset_name(i),UI_PRESET0+i,theme_is_preset(i),1);
+        aui_heading("Light collection");for(int i=12;i<17;i++)aui_row("choice",theme_preset_name(i),UI_PRESET0+i,theme_is_preset(i),1);
+        aui_heading("Chromatic collection");for(int i=17;i<THEME_PRESET_COUNT;i++)aui_row("choice",theme_preset_name(i),UI_PRESET0+i,theme_is_preset(i),1);
         aui_button("Customize theme",5000);
         }else if(G.settingsTab==1){aui_heading("Stylus button");aui_toggle("Use stylus button",UI_BUTTONS_TOGGLE,G.buttonBindingsEnabled);
         if(G.buttonBindingsEnabled){

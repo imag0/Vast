@@ -437,9 +437,12 @@ public final class VastUi {
         int oldScroll=0;
         if(panelDialog!=null){View old=panelDialog.findViewById(9001);if(old!=null)oldScroll=old.getScrollY();}
         try{
-            JSONObject model=new JSONObject(json);Context c=themed(a,background);
-            boolean reuse=panelDialog!=null&&panelDialog.isShowing()&&panelTitle.equals(model.getString("title"))&&panelBackground==background;
-            if(!reuse){closePanel();oldScroll=0;}owner=a;panelKey=json;panelTitle=model.getString("title");panelBackground=background;
+            JSONObject model=new JSONObject(json);Context c=themed(a,background);String nextTitle=model.getString("title");
+            boolean samePanel=panelDialog!=null&&panelDialog.isShowing()&&panelTitle.equals(nextTitle);
+            boolean reuse=samePanel&&panelBackground==background;
+            /* A theme changes the dialog context, so rebuild it, but keep the
+               user's place in the now-long curated theme collection. */
+            if(!reuse){closePanel();if(!samePanel)oldScroll=0;}owner=a;panelKey=json;panelTitle=nextTitle;panelBackground=background;
             LinearLayout body=new LinearLayout(c);body.setOrientation(LinearLayout.VERTICAL);
             body.setPadding(dp(c,20),dp(c,8),dp(c,20),dp(c,8));
             JSONArray rows=model.getJSONArray("rows");

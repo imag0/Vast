@@ -6,7 +6,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 
 ROOT=Path(__file__).resolve().parents[1]; B=ROOT/'build'; OUT=ROOT/'dist'; OUT.mkdir(exist_ok=True)
-VERSION_CODE=53; VERSION_NAME='3.2.18'
+VERSION_CODE=54; VERSION_NAME='3.2.19'
 FIXED_ZIP_TIME=(2026,9,23,0,0,0)
 OCR=ROOT/'assets'/'ocr'/'ppocrv5_mobile_rec'
 ORT=ROOT/'third_party'/'onnxruntime'

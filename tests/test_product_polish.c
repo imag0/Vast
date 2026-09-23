@@ -3,10 +3,22 @@
 #include "../test_v30.c"
 #undef main
 #undef check
+#include <math.h>
+#include <string.h>
 static int checks,failures;
 static void check(int value,const char*name){checks++;printf("%s %s\n",value?"PASS":"FAIL",name);if(!value)failures++;}
+static float theme_channel(int c){float v=c/255.0f;return v<=0.04045f?v/12.92f:powf((v+0.055f)/1.055f,2.4f);}
+static float theme_luminance(uint32_t c){return .2126f*theme_channel((c>>16)&255)+.7152f*theme_channel((c>>8)&255)+.0722f*theme_channel(c&255);}
+static float theme_contrast(uint32_t a,uint32_t b){float x=theme_luminance(a),y=theme_luminance(b);if(x<y){float t=x;x=y;y=t;}return (x+.05f)/(y+.05f);}
 int main(void){
     memset(&G,0,sizeof(G));G.scale=G.uiScale=1;G.animTimerFd=-1;G.noteN=1;G.editorTarget=-1;
+    int uniqueNames=1,uniqueThemes=1,readableText=1,readableMuted=1,selectable=1;
+    for(int i=0;i<THEME_PRESET_COUNT;i++){
+        Theme t=theme_preset_value(i);if(!theme_preset_name(i)[0]||theme_contrast(t.text,t.bg)<4.5f||theme_contrast(t.text,t.glass)<4.5f)readableText=0;if(theme_contrast(t.muted,t.bg)<3.0f)readableMuted=0;
+        for(int j=0;j<i;j++){if(text_equal_local(theme_preset_name(i),theme_preset_name(j)))uniqueNames=0;if(memcmp(&t,&THEME_PRESETS[j],sizeof(t))==0)uniqueThemes=0;}
+        theme_preset(i);if(!theme_is_preset(i))selectable=0;
+    }
+    check(THEME_PRESET_COUNT>=20,"appearance offers a large curated theme collection");check(uniqueNames&&uniqueThemes,"curated themes have unique names and complete role palettes");check(readableText,"every curated theme keeps primary text readable on canvas and panels");check(readableMuted,"every curated theme keeps secondary text distinguishable");check(selectable&&UI_ROLE0==UI_PRESET0+THEME_PRESET_COUNT,"every curated theme has a collision-free selectable action");theme_preset(0);
     NoteObj*n=&G.notes[0];n->active=1;n->id=73;n->type=NOTE_TEXT;copy_text_local(n->text,NOTE_TEXT_CAP,"Hi");note_autosize(n);float shortW=n->w;
     copy_text_local(n->text,NOTE_TEXT_CAP,"A somewhat longer note");note_autosize(n);check(n->w>shortW,"short text grows naturally");
     char paragraph[NOTE_TEXT_CAP];int len=0;for(int i=0;i<25;i++)len+=snprintf(paragraph+len,sizeof(paragraph)-len,"Line %d: English, Chinese 世界 and emoji 😀.\n",i);

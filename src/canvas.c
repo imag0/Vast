@@ -412,20 +412,43 @@ typedef struct { int32_t pw,ph; float x,y,w,h,rot; uint32_t pixelCount; } ImageH
 typedef struct { char magic[4]; uint32_t count; } ImageMetaFileHead;
 typedef struct { int32_t pw,ph; float x,y,w,h,rot; } ImageMetaRecord;
 
-static Theme theme_preset_value(int preset){
-    Theme value;Theme*t=&value;
-    if(preset==1){ // OLED
-        *t=(Theme){0x000000,0x101010,0x1b1b1b,0x393939,0x0b0b0d,0x151518,0x222228,0x34343c,0xf6f7fb,0x8a8d98,0x7aa7ff,0x55e6d1,0xb998ff,0xffca66,0xff6579,0x63e69c,0x000000};
-    }else if(preset==2){ // Paper
-        *t=(Theme){0xebe7de,0xd8d2c8,0xc8c0b4,0xa9a095,0xf7f4ed,0xeee9df,0xe3ddd2,0xb9b0a4,0x1c2026,0x646a70,0x316fbd,0x168f8a,0x7751b5,0xa46d16,0xb43f50,0x2e8456,0xd6d0c6};
-    }else if(preset==3){ // Blueprint
-        *t=(Theme){0x071a2c,0x0e2a43,0x174263,0x2a6b94,0x0b2237,0x10304c,0x17415e,0x2c6284,0xe8f6ff,0x83a8be,0x4dd7ff,0x58efdb,0xb69cff,0xffd66f,0xff7285,0x63e7a7,0x04111d};
-    }else if(preset==4){ // Warm
-        *t=(Theme){0x15100e,0x241a16,0x35251e,0x604335,0x1d1512,0x2a1e19,0x382720,0x584238,0xfff4e9,0xb3a093,0xff9f63,0x67d7ca,0xc59cff,0xffcf6b,0xff6e72,0x7ae29b,0x090706};
-    }else{ // Void / default
-        *t=(Theme){0x090d13,0x121923,0x1b2633,0x334a60,0x121923,0x18222e,0x202d3b,0x304154,0xf4f7fb,0x8695a7,0x6aa9ff,0x4de0d0,0xb18cff,0xffc55d,0xff6475,0x5fe39a,0x05070a};
-    }return value;
-}
+#define THEME_PRESET_COUNT 24
+static const char*const THEME_PRESET_NAMES[THEME_PRESET_COUNT]={
+    "Dark","OLED","Paper","Blueprint","Warm",
+    "Graphite","Midnight","Forest","Aubergine","Espresso","Nord","Carbon",
+    "Porcelain","Sand","Sage","Lavender","Ice",
+    "Ocean","Mint","Rose","Sunset","Copper","Neon","Contrast"
+};
+/* Each preset is a complete, hand-tuned role set rather than an accent swap.
+   The original five remain byte-for-byte identical for saved-theme matching. */
+static const Theme THEME_PRESETS[THEME_PRESET_COUNT]={
+    {0x090d13,0x121923,0x1b2633,0x334a60,0x121923,0x18222e,0x202d3b,0x304154,0xf4f7fb,0x8695a7,0x6aa9ff,0x4de0d0,0xb18cff,0xffc55d,0xff6475,0x5fe39a,0x05070a},
+    {0x000000,0x101010,0x1b1b1b,0x393939,0x0b0b0d,0x151518,0x222228,0x34343c,0xf6f7fb,0x8a8d98,0x7aa7ff,0x55e6d1,0xb998ff,0xffca66,0xff6579,0x63e69c,0x000000},
+    {0xebe7de,0xd8d2c8,0xc8c0b4,0xa9a095,0xf7f4ed,0xeee9df,0xe3ddd2,0xb9b0a4,0x1c2026,0x646a70,0x316fbd,0x168f8a,0x7751b5,0xa46d16,0xb43f50,0x2e8456,0xd6d0c6},
+    {0x071a2c,0x0e2a43,0x174263,0x2a6b94,0x0b2237,0x10304c,0x17415e,0x2c6284,0xe8f6ff,0x83a8be,0x4dd7ff,0x58efdb,0xb69cff,0xffd66f,0xff7285,0x63e7a7,0x04111d},
+    {0x15100e,0x241a16,0x35251e,0x604335,0x1d1512,0x2a1e19,0x382720,0x584238,0xfff4e9,0xb3a093,0xff9f63,0x67d7ca,0xc59cff,0xffcf6b,0xff6e72,0x7ae29b,0x090706},
+    {0x111318,0x1a1e25,0x242a34,0x3d4654,0x181b21,0x20242c,0x292e38,0x3a424f,0xf3f4f6,0x979eaa,0x8ab4f8,0x74d4d4,0xb4a0e5,0xf2c66d,0xf07b8a,0x7bd8a0,0x08090b},
+    {0x080b18,0x111832,0x1a2850,0x2a4578,0x0e1326,0x151d38,0x1d294b,0x2e4170,0xeef2ff,0x8f9bc4,0x7697ff,0x57d6e8,0xbf91ff,0xffc96b,0xff718a,0x65dda5,0x03040a},
+    {0x08120f,0x11231c,0x1b382c,0x2d5a46,0x0e1c17,0x162a22,0x1e382d,0x315344,0xeaf6ef,0x8eaa9c,0x74d39f,0x5bd6c5,0xb29ce8,0xe6c66a,0xef7380,0x58d68d,0x030805},
+    {0x140c18,0x24152b,0x382042,0x63366f,0x1e1223,0x2b1932,0x3a2144,0x593263,0xf8eef9,0xad8eae,0xd58ce4,0x70d4cc,0xb799ff,0xf3c46f,0xf47b91,0x75d99a,0x08050a},
+    {0x160f0b,0x281a12,0x3b281c,0x6b4934,0x211711,0x2e2018,0x3f2b20,0x604534,0xfff2e5,0xb19a89,0xd89a68,0x6fcfbe,0xb99ae8,0xe7bd66,0xed7680,0x73cf91,0x090604},
+    {0x2e3440,0x3b4252,0x434c5e,0x4c566a,0x343b49,0x3b4353,0x454f61,0x596579,0xeceff4,0xa3adbd,0x88c0d0,0x8fbcbb,0xb48ead,0xebcb8b,0xbf616a,0xa3be8c,0x1f242e},
+    {0x0d1112,0x172021,0x203032,0x385052,0x131a1b,0x1b2526,0x263233,0x3b4b4c,0xedf5f4,0x90a4a2,0x63c7be,0x4ed9d0,0xa2a0e8,0xe8c76a,0xec727d,0x67d597,0x060809},
+    {0xf5f6f4,0xe2e5e1,0xd1d6d0,0xa8b0aa,0xffffff,0xeff2ee,0xe4e9e3,0xbcc4bd,0x1d2429,0x616d72,0x356fbd,0x167f84,0x7555b5,0x9a6818,0xb2384b,0x287b50,0xd9ddda},
+    {0xeee6d5,0xd9cfbb,0xc8baa0,0xaa9471,0xf9f3e7,0xece2d0,0xe1d4bd,0xbba98b,0x29231c,0x6b6255,0xa8642a,0x147f7c,0x7550a5,0x966617,0xb43d48,0x34784a,0xd4c8b3},
+    {0xe4ebe3,0xcbd8cb,0xb7c9b8,0x8ead91,0xf2f6f1,0xe7eee6,0xdbe6da,0xa9bdaa,0x1e2920,0x5d6c60,0x37734d,0x167e78,0x6d579f,0x9a6c1b,0xb13f4b,0x2c7a49,0xc9d4c9},
+    {0xeeeaf5,0xd9d2e6,0xc7bcd8,0x9e8bb8,0xf9f7fc,0xeeeaf6,0xe4deed,0xb9accb,0x282231,0x6b6175,0x6b55b5,0x197f85,0x8153ad,0x98651d,0xb23e55,0x347a55,0xd7d1df},
+    {0xe8f1f5,0xcfdfe6,0xb9d0da,0x8fadb9,0xf5fafc,0xeaf3f7,0xddebf0,0xacc3cc,0x17272e,0x586d75,0x286e9e,0x087e82,0x6653a5,0x91681a,0xac3f52,0x247850,0xd0dde2},
+    {0x061824,0x0b2a3d,0x10415c,0x1d6889,0x092130,0x0d2e41,0x123d55,0x205c78,0xeaf8ff,0x83aabb,0x40bde8,0x42d6c1,0x9e94eb,0xf3c665,0xf27783,0x55d796,0x020b10},
+    {0x071916,0x0d2b25,0x144239,0x236f5d,0x0a231f,0x0f312b,0x17433a,0x256454,0xeafff8,0x83ada1,0x54d6a2,0x40d8c6,0xa395e8,0xe9c761,0xed7681,0x4cdb8b,0x020c0a},
+    {0x1a0c12,0x2d141f,0x431d2d,0x73344c,0x241019,0x321723,0x452031,0x673046,0xfff0f5,0xb38b9b,0xf28aad,0x63d0c7,0xb59aee,0xf0c36a,0xf16f87,0x68d494,0x0c0508},
+    {0x1c100b,0x321b11,0x4a2818,0x7d4a2d,0x28170f,0x382016,0x4c2c1e,0x70452f,0xfff3e8,0xb79a86,0xff985d,0x61d3c4,0xb49be9,0xf6c85f,0xee6e74,0x6fd491,0x0d0704},
+    {0x17100d,0x2a1c16,0x3f2b21,0x704c37,0x221711,0x302119,0x422e23,0x644936,0xfff1e6,0xb49b8c,0xc9895b,0x64ccc1,0xad98df,0xe2b961,0xe87376,0x6dcc8c,0x0a0705},
+    {0x08080f,0x151425,0x242240,0x474270,0x11101d,0x1a192d,0x262442,0x403d66,0xf7f7ff,0xa5a2c5,0x7d8cff,0x30efd0,0xd996ff,0xffd85d,0xff557c,0x55ef92,0x030306},
+    {0x000000,0x1a1a1a,0x303030,0x656565,0x090909,0x171717,0x282828,0x5a5a5a,0xffffff,0xbdbdbd,0xffd400,0x00e5ff,0xc58cff,0xffdb4d,0xff496c,0x49f28f,0x000000}
+};
+static const char*theme_preset_name(int preset){return preset>=0&&preset<THEME_PRESET_COUNT?THEME_PRESET_NAMES[preset]:"Theme";}
+static Theme theme_preset_value(int preset){return THEME_PRESETS[preset>=0&&preset<THEME_PRESET_COUNT?preset:0];}
 static void theme_preset(int preset){G.theme=theme_preset_value(preset);G.sceneRevision++;G.minimapDirty=1;}
 static int theme_is_preset(int preset){Theme t=theme_preset_value(preset);const uint8_t*a=(const uint8_t*)&t,*b=(const uint8_t*)&G.theme;for(size_t i=0;i<sizeof(Theme);i++)if(a[i]!=b[i])return 0;return 1;}
 static uint32_t mix_color(uint32_t a,uint32_t b,int pct){int ar=(a>>16)&255,ag=(a>>8)&255,ab=a&255,br=(b>>16)&255,bg=(b>>8)&255,bb=b&255;int r=(ar*(100-pct)+br*pct)/100,g=(ag*(100-pct)+bg*pct)/100,bl=(ab*(100-pct)+bb*pct)/100;return ((uint32_t)r<<16)|((uint32_t)g<<8)|(uint32_t)bl;}
@@ -1599,7 +1622,7 @@ static const char*ocr_status_name(OcrManagerStatus*out){if(out)memset(out,0,size
 #endif
 }
 static void draw_settings_panel(Surf*s){if(!G.settingsPanel)return;int m=margin_ui(),w=mini(us(1040),s->w-2*m),h=mini(us(780),s->h-2*m),x=(s->w-w)/2,y=(s->h-h)/2;glass(s,x,y,x+w,y+h,us(30));text(s,x+us(30),y+us(26),"Settings",ts(3),C_TEXT);button(s,x+w-us(144),y+us(18),x+w-us(24),y+us(62),"Close",0,C_DANGER);const char*tabs[5]={"Appearance","Stylus","Drawing","Display","Handwriting"};int gap=us(8),tw=(w-us(60)-gap*4)/5;for(int i=0;i<5;i++){int tx=x+us(30)+i*(tw+gap);button(s,tx,y+us(82),tx+tw,y+us(132),tabs[i],G.settingsTab==i,C_ACCENT);}hline(s,y+us(150),x+us(30),x+w-us(30),C_BORDER);
-    if(G.settingsTab==0){int yy=y+us(178);char q[80];text(s,x+us(34),yy,"Interface scale",ts(2),C_MUTED);snprintf(q,sizeof(q),"%.0f%%",G.uiScale*100.0f);button(s,x+us(218),yy-us(12),x+us(298),yy+us(34),"-",0,C_ACCENT);button(s,x+us(310),yy-us(12),x+us(440),yy+us(34),q,1,C_ACCENT);button(s,x+us(452),yy-us(12),x+us(532),yy+us(34),"+",0,C_ACCENT);yy+=us(72);text(s,x+us(34),yy,"Themes",ts(2),C_MUTED);const char*pn[5]={"Void","OLED","Paper","Blue","Warm"};for(int i=0;i<5;i++)button(s,x+us(150+i*150),yy-us(14),x+us(286+i*150),yy+us(34),pn[i],0,i==1?C_TEXT:(i==2?0x9b7a4d:(i==3?C_CYAN:(i==4?C_WARN:C_ACCENT))));yy+=us(78);text(s,x+us(34),yy,"Color role",ts(2),C_MUTED);for(int i=0;i<8;i++){int col=i%4,row=i/4,bx=x+us(34+col*235),by=yy+us(34+row*58);button(s,bx,by,bx+us(215),by+us(46),theme_role_name(i),G.themeRole==i,i==7?C_DANGER:(i==5?C_CYAN:(i==6?C_VIOLET:C_ACCENT)));}yy+=us(166);text(s,x+us(34),yy,"Palette",ts(2),C_MUTED);for(int i=0;i<12;i++){int col=i%6,row=i/6;float cx=(float)(x+us(120+col*135)),cy=(float)(yy+us(42+row*70));circle(s,cx,cy,us(25),C_BORDER);circle(s,cx,cy,us(20),THEME_PALETTE[i]);}yy+=us(176);text(s,x+us(34),yy,"Customize each role, then fine-tune the whole interface scale.",ts(2),C_MUTED);button(s,x+w-us(220),yy-us(12),x+w-us(34),yy+us(36),"Reset theme",0,C_DANGER);
+    if(G.settingsTab==0){int yy=y+us(178);char q[80];text(s,x+us(34),yy,"Interface scale",ts(2),C_MUTED);snprintf(q,sizeof(q),"%.0f%%",G.uiScale*100.0f);button(s,x+us(218),yy-us(12),x+us(298),yy+us(34),"-",0,C_ACCENT);button(s,x+us(310),yy-us(12),x+us(440),yy+us(34),q,1,C_ACCENT);button(s,x+us(452),yy-us(12),x+us(532),yy+us(34),"+",0,C_ACCENT);yy+=us(72);text(s,x+us(34),yy,"Curated themes",ts(2),C_MUTED);for(int i=0;i<THEME_PRESET_COUNT;i++){int col=i%8,row=i/8,bx=x+us(34+col*118),by=yy+us(30+row*44);button(s,bx,by,bx+us(110),by+us(38),theme_preset_name(i),theme_is_preset(i),THEME_PRESETS[i].accent);}yy+=us(165);text(s,x+us(34),yy,"Color role",ts(2),C_MUTED);for(int i=0;i<8;i++){int col=i%4,row=i/4,bx=x+us(34+col*235),by=yy+us(28+row*48);button(s,bx,by,bx+us(215),by+us(40),theme_role_name(i),G.themeRole==i,i==7?C_DANGER:(i==5?C_CYAN:(i==6?C_VIOLET:C_ACCENT)));}yy+=us(124);text(s,x+us(34),yy,"Palette",ts(2),C_MUTED);for(int i=0;i<12;i++){int col=i%6,row=i/6;float cx=(float)(x+us(120+col*135)),cy=(float)(yy+us(36+row*58));circle(s,cx,cy,us(23),C_BORDER);circle(s,cx,cy,us(18),THEME_PALETTE[i]);}yy+=us(140);text(s,x+us(34),yy,"Customize each role, then fine-tune the whole interface scale.",ts(2),C_MUTED);button(s,x+w-us(220),yy-us(12),x+w-us(34),yy+us(36),"Reset theme",0,C_DANGER);
     }else if(G.settingsTab==1){int yy=y+us(180);text(s,x+us(34),yy,"Stylus button mappings",ts(2),C_TEXT);button(s,x+us(286),yy-us(14),x+us(510),yy+us(36),G.buttonBindingsEnabled?"Enabled":"Disabled",G.buttonBindingsEnabled,G.buttonBindingsEnabled?C_GREEN:C_MUTED);text(s,x+us(536),yy,G.buttonBindingsEnabled?(G.stylusButtonDown?"Signal active":"Waiting for button") : "Button events ignored",ts(2),G.stylusButtonDown?C_GREEN:C_MUTED);yy+=us(82);const char*labs[3]={"Press","Hold","Double"};int acts[3]={G.buttonPressAction,G.buttonHoldAction,G.buttonDoubleAction};for(int r=0;r<3;r++){uint32_t ac=G.buttonBindingsEnabled?(r==1?C_VIOLET:(r==2?C_CYAN:C_ACCENT)):C_MUTED;text(s,x+us(34),yy+us(10),labs[r],ts(2),ac);button(s,x+us(210),yy-us(4),x+us(270),yy+us(46),"-",0,C_MUTED);button(s,x+us(282),yy-us(4),x+us(710),yy+us(46),button_action_name(acts[r]),G.buttonBindingsEnabled,ac);button(s,x+us(722),yy-us(4),x+us(782),yy+us(46),"+",0,C_MUTED);yy+=us(72);}yy+=us(26);text(s,x+us(34),yy,"Leave mappings disabled for pens that never expose side-button events.",ts(2),C_MUTED);text(s,x+us(34),yy+us(34),"Enable them on another tablet only if the signal indicator reacts.",ts(2),C_MUTED);
     }else if(G.settingsTab==2){int yy=y+us(184);char q[96];text(s,x+us(34),yy,"Pressure smoothing",ts(2),C_TEXT);snprintf(q,sizeof(q),"%.0f%%",G.pressureSmoothing*100);meter(s,x+us(300),yy+us(8),us(300),G.pressureSmoothing,C_VIOLET);button(s,x+us(620),yy-us(4),x+us(680),yy+us(46),"-",0,C_MUTED);button(s,x+us(692),yy-us(4),x+us(812),yy+us(46),q,1,C_VIOLET);button(s,x+us(824),yy-us(4),x+us(884),yy+us(46),"+",0,C_MUTED);yy+=us(88);text(s,x+us(34),yy,"Stroke smoothing",ts(2),C_TEXT);snprintf(q,sizeof(q),"%.0f%%",G.strokeSmoothing*100);meter(s,x+us(300),yy+us(8),us(300),G.strokeSmoothing,C_CYAN);button(s,x+us(620),yy-us(4),x+us(680),yy+us(46),"-",0,C_MUTED);button(s,x+us(692),yy-us(4),x+us(812),yy+us(46),q,1,C_CYAN);button(s,x+us(824),yy-us(4),x+us(884),yy+us(46),"+",0,C_MUTED);yy+=us(88);text(s,x+us(34),yy,"Highlighter opacity",ts(2),C_TEXT);snprintf(q,sizeof(q),"%.0f%%",G.highlighterOpacity*100);meter(s,x+us(300),yy+us(8),us(300),G.highlighterOpacity/.80f,C_WARN);button(s,x+us(620),yy-us(4),x+us(680),yy+us(46),"-",0,C_MUTED);button(s,x+us(692),yy-us(4),x+us(812),yy+us(46),q,1,C_WARN);button(s,x+us(824),yy-us(4),x+us(884),yy+us(46),"+",0,C_MUTED);yy+=us(88);text(s,x+us(34),yy,"Radial menu hold",ts(2),C_TEXT);snprintf(q,sizeof(q),"%.1f s",G.radialHoldSec);meter(s,x+us(300),yy+us(8),us(300),(G.radialHoldSec-.35f)/2.65f,C_GREEN);button(s,x+us(620),yy-us(4),x+us(680),yy+us(46),"-",0,C_MUTED);button(s,x+us(692),yy-us(4),x+us(812),yy+us(46),q,1,C_GREEN);button(s,x+us(824),yy-us(4),x+us(884),yy+us(46),"+",0,C_MUTED);yy+=us(96);text(s,x+us(34),yy,"The marker is now a flat rectangular ribbon with constant width.",ts(2),C_MUTED);text(s,x+us(34),yy+us(34),"Hold a finger on empty canvas for the radial menu; tune 0.4 to 3.0 s.",ts(2),C_MUTED);
     }else if(G.settingsTab==3){int yy=y+us(184);const char*labs[3]={"Grid style","Far zoom","Performance"};const char*vals[3]={grid_style_name(),far_zoom_name(),perf_name()};uint32_t ac[3]={C_ACCENT,C_CYAN,C_GREEN};for(int r=0;r<3;r++){text(s,x+us(34),yy+us(10),labs[r],ts(2),C_TEXT);button(s,x+us(560),yy-us(4),x+us(620),yy+us(46),"-",0,C_MUTED);button(s,x+us(632),yy-us(4),x+us(820),yy+us(46),vals[r],1,ac[r]);button(s,x+us(832),yy-us(4),x+us(892),yy+us(46),"+",0,C_MUTED);yy+=us(76);}yy+=us(18);text(s,x+us(34),yy,"Only controls that affect the simplified canvas remain here.",ts(2),C_MUTED);text(s,x+us(34),yy+us(34),G.gpuActive?"GPU renderer active":"GPU renderer unavailable - software fallback",ts(2),G.gpuActive?C_GREEN:C_WARN);
@@ -1642,8 +1665,8 @@ enum {
     UI_PMIN_MINUS,UI_PMIN_PLUS,UI_PMAX_MINUS,UI_PMAX_PLUS,UI_CURVE_SOFT,UI_CURVE_LINEAR,UI_CURVE_FIRM,UI_SNAP,UI_CLEAR_DIM,UI_DELETE_DIM,UI_CALIBRATE,
     UI_PHOTO_DELETE,UI_PHOTO_DONE,UI_PHOTO_SNAP,UI_FRAME_NEW,UI_FRAME_CLOSE,UI_FRAME_PREV,UI_FRAME_NEXT,UI_FRAME_JUMP,UI_FRAME_DELETE,UI_FRAME_FIT,UI_LAYER_INK,UI_LAYER_MARKER,UI_LAYER_PHOTOS,UI_LAYER_CAD,UI_LAYER_FRAMES,UI_FRAME_ITEM0,UI_FRAME_ITEM1,UI_FRAME_ITEM2,UI_FRAME_ITEM3,UI_FRAME_ITEM4,UI_FRAME_ITEM5,
     UI_SETTINGS_CLOSE,UI_SETTINGS_APPEARANCE,UI_SETTINGS_STYLUS,UI_SETTINGS_DRAWING,UI_SETTINGS_DISPLAY,UI_SETTINGS_HANDWRITING,UI_OCR_TOGGLE,UI_OCR_REBUILD,UI_SCALE_MINUS,UI_SCALE_PLUS,UI_BUTTONS_TOGGLE,
-    UI_PRESET0,UI_PRESET1,UI_PRESET2,UI_PRESET3,UI_PRESET4,
-    UI_ROLE0,UI_ROLE1,UI_ROLE2,UI_ROLE3,UI_ROLE4,UI_ROLE5,UI_ROLE6,UI_ROLE7,
+    UI_PRESET0,UI_PRESET1,UI_PRESET2,UI_PRESET3,UI_PRESET4,UI_PRESET_LAST=UI_PRESET0+THEME_PRESET_COUNT-1,
+    UI_ROLE0=UI_PRESET_LAST+1,UI_ROLE1,UI_ROLE2,UI_ROLE3,UI_ROLE4,UI_ROLE5,UI_ROLE6,UI_ROLE7,
     UI_PALETTE0,UI_PALETTE1,UI_PALETTE2,UI_PALETTE3,UI_PALETTE4,UI_PALETTE5,UI_PALETTE6,UI_PALETTE7,UI_PALETTE8,UI_PALETTE9,UI_PALETTE10,UI_PALETTE11,
     UI_THEME_RESET,UI_PRESS_MINUS,UI_PRESS_PLUS,UI_HOLD_MINUS,UI_HOLD_PLUS,UI_DOUBLE_MINUS,UI_DOUBLE_PLUS,
     UI_PSMOOTH_MINUS,UI_PSMOOTH_PLUS,UI_SSMOOTH_MINUS,UI_SSMOOTH_PLUS,UI_HILITE_MINUS,UI_HILITE_PLUS,UI_RADIAL_MINUS,UI_RADIAL_PLUS,
@@ -1666,7 +1689,7 @@ static int ui_hit_settings(float x,float y){
     int m=margin_ui(),w=mini(us(1040),G.screenW-2*m),h=mini(us(780),G.screenH-2*m),px=(G.screenW-w)/2,py=(G.screenH-h)/2;
     if(hit_box(x,y,px+w-us(144),py+us(18),px+w-us(24),py+us(62)))return UI_SETTINGS_CLOSE;
     {static const int ids[5]={UI_SETTINGS_APPEARANCE,UI_SETTINGS_STYLUS,UI_SETTINGS_DRAWING,UI_SETTINGS_DISPLAY,UI_SETTINGS_HANDWRITING};int gap=us(8),tw=(w-us(60)-gap*4)/5;for(int i=0;i<5;i++){int tx=px+us(30)+i*(tw+gap);if(hit_box(x,y,tx,py+us(82),tx+tw,py+us(132)))return ids[i];}}
-    if(G.settingsTab==0){int yy=py+us(178);if(hit_box(x,y,px+us(218),yy-us(12),px+us(298),yy+us(34)))return UI_SCALE_MINUS;if(hit_box(x,y,px+us(452),yy-us(12),px+us(532),yy+us(34)))return UI_SCALE_PLUS;yy+=us(72);for(int i=0;i<5;i++)if(hit_box(x,y,px+us(150+i*150),yy-us(14),px+us(286+i*150),yy+us(34)))return UI_PRESET0+i;yy+=us(78);for(int i=0;i<8;i++){int col=i%4,row=i/4,bx=px+us(34+col*235),by=yy+us(34+row*58);if(hit_box(x,y,bx,by,bx+us(215),by+us(46)))return UI_ROLE0+i;}yy+=us(166);for(int i=0;i<12;i++){int col=i%6,row=i/6,cx=px+us(120+col*135),cy=yy+us(42+row*70);if(sq(x-cx)+sq(y-cy)<=sq((float)us(34)))return UI_PALETTE0+i;}yy+=us(176);if(hit_box(x,y,px+w-us(220),yy-us(12),px+w-us(34),yy+us(36)))return UI_THEME_RESET;
+    if(G.settingsTab==0){int yy=py+us(178);if(hit_box(x,y,px+us(218),yy-us(12),px+us(298),yy+us(34)))return UI_SCALE_MINUS;if(hit_box(x,y,px+us(452),yy-us(12),px+us(532),yy+us(34)))return UI_SCALE_PLUS;yy+=us(72);for(int i=0;i<THEME_PRESET_COUNT;i++){int col=i%8,row=i/8,bx=px+us(34+col*118),by=yy+us(30+row*44);if(hit_box(x,y,bx,by,bx+us(110),by+us(38)))return UI_PRESET0+i;}yy+=us(165);for(int i=0;i<8;i++){int col=i%4,row=i/4,bx=px+us(34+col*235),by=yy+us(28+row*48);if(hit_box(x,y,bx,by,bx+us(215),by+us(40)))return UI_ROLE0+i;}yy+=us(124);for(int i=0;i<12;i++){int col=i%6,row=i/6,cx=px+us(120+col*135),cy=yy+us(36+row*58);if(sq(x-cx)+sq(y-cy)<=sq((float)us(31)))return UI_PALETTE0+i;}yy+=us(140);if(hit_box(x,y,px+w-us(220),yy-us(12),px+w-us(34),yy+us(36)))return UI_THEME_RESET;
     }else if(G.settingsTab==1){int yy=py+us(180);if(hit_box(x,y,px+us(286),yy-us(14),px+us(510),yy+us(36)))return UI_BUTTONS_TOGGLE;yy+=us(82);if(G.buttonBindingsEnabled){for(int r=0;r<3;r++){if(hit_box(x,y,px+us(210),yy-us(4),px+us(270),yy+us(46)))return r==0?UI_PRESS_MINUS:(r==1?UI_HOLD_MINUS:UI_DOUBLE_MINUS);if(hit_box(x,y,px+us(722),yy-us(4),px+us(782),yy+us(46)))return r==0?UI_PRESS_PLUS:(r==1?UI_HOLD_PLUS:UI_DOUBLE_PLUS);yy+=us(72);}}
     }else if(G.settingsTab==2){int yy=py+us(184);for(int r=0;r<4;r++){if(hit_box(x,y,px+us(620),yy-us(4),px+us(680),yy+us(46)))return r==0?UI_PSMOOTH_MINUS:(r==1?UI_SSMOOTH_MINUS:(r==2?UI_HILITE_MINUS:UI_RADIAL_MINUS));if(hit_box(x,y,px+us(824),yy-us(4),px+us(884),yy+us(46)))return r==0?UI_PSMOOTH_PLUS:(r==1?UI_SSMOOTH_PLUS:(r==2?UI_HILITE_PLUS:UI_RADIAL_PLUS));yy+=us(88);}}
     else if(G.settingsTab==3){int yy=py+us(184);for(int r=0;r<3;r++){if(hit_box(x,y,px+us(560),yy-us(4),px+us(620),yy+us(46)))return UI_DISP0_MINUS+r*2;if(hit_box(x,y,px+us(832),yy-us(4),px+us(892),yy+us(46)))return UI_DISP0_PLUS+r*2;yy+=us(76);}}
@@ -1840,6 +1863,7 @@ static void display_adjust(int row,int dir){switch(row){case 0:G.gridStyle=cycle
 static void handle_ui(int id,int64_t ms){
     if(G.photoImportActive)return;
     if(id!=UI_CLEAR)G.clearArmed=0;
+    if(id>=UI_PRESET0&&id<=UI_PRESET_LAST){theme_preset(id-UI_PRESET0);G.metaDirty=1;save_meta();render();return;}
     switch(id){
         case UI_RAIL_OPEN:G.railOpen=1;G.zenMode=0;start_anim_timer();arm_rail_timer();break;
         case UI_ADD:close_workspace_panels();G.addPanel=1;G.photoMode=0;G.pressurePanel=0;break;
@@ -1947,7 +1971,6 @@ static void handle_ui(int id,int64_t ms){
             break;
         case UI_BUTTONS_TOGGLE:G.buttonBindingsEnabled=!G.buttonBindingsEnabled;if(!G.buttonBindingsEnabled){G.stylusButtonDown=0;G.buttonQuickErase=0;G.pendingButtonSingle=0;cancel_button_timer();}G.metaDirty=1;break;
         case UI_SCALE_MINUS:G.uiScale=clampf(G.uiScale-0.05f,0.70f,1.55f);G.metaDirty=1;break;case UI_SCALE_PLUS:G.uiScale=clampf(G.uiScale+0.05f,0.70f,1.55f);G.metaDirty=1;break;
-        case UI_PRESET0:case UI_PRESET1:case UI_PRESET2:case UI_PRESET3:case UI_PRESET4:theme_preset(id-UI_PRESET0);G.metaDirty=1;break;
         case UI_ROLE0:case UI_ROLE1:case UI_ROLE2:case UI_ROLE3:case UI_ROLE4:case UI_ROLE5:case UI_ROLE6:case UI_ROLE7:G.themeRole=id-UI_ROLE0;break;
         case UI_PALETTE0:case UI_PALETTE1:case UI_PALETTE2:case UI_PALETTE3:case UI_PALETTE4:case UI_PALETTE5:case UI_PALETTE6:case UI_PALETTE7:case UI_PALETTE8:case UI_PALETTE9:case UI_PALETTE10:case UI_PALETTE11:theme_role_set(G.themeRole,THEME_PALETTE[id-UI_PALETTE0]);break;
         case UI_THEME_RESET:theme_preset(0);G.metaDirty=1;break;
