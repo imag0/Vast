@@ -80,6 +80,15 @@ public final class VastUi {
     private static native void nativeUnit(int unit);
     private static native void nativeColor(int color);
     private static native int[] nativeThumbnail(int index);
+    private static android.os.ParcelFileDescriptor photoDescriptor;
+    private static android.graphics.BitmapRegionDecoder photoDecoder;
+    private static long photoDecoderId=-1;
+
+    private static synchronized void closePhotoDecoder(){
+        if(photoDecoder!=null){photoDecoder.recycle();photoDecoder=null;}
+        if(photoDescriptor!=null){try{photoDescriptor.close();}catch(Exception ignored){}photoDescriptor=null;}
+        photoDecoderId=-1;
+    }
 
     /** Source dimensions and orientation for bounded, region-by-region import. */
     public static int[] photoInfo(Activity activity,long mediaId,int maxEdge){
@@ -99,18 +108,32 @@ public final class VastUi {
         return new int[]{width,height,sample,orientation,outputW,outputH};
     }
 
-    /** Decode only one source region so an 8K import never needs a second 8K Java bitmap. */
-    public static int[] photoTile(Activity activity,long mediaId,int left,int top,int right,int bottom,int sample){
+    /** Open one reusable decoder session; native code consumes it a tile per frame. */
+    public static synchronized int[] photoOpen(Activity activity,long mediaId,int maxEdge){
+        closePhotoDecoder();
+        int[] info=photoInfo(activity,mediaId,maxEdge);if(info==null)return null;
         android.net.Uri uri=android.content.ContentUris.withAppendedId(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,mediaId);
-        android.graphics.BitmapRegionDecoder decoder=null;android.graphics.Bitmap bitmap=null;
-        try(android.os.ParcelFileDescriptor pfd=activity.getContentResolver().openFileDescriptor(uri,"r")){
-            if(pfd==null)return null;decoder=android.graphics.BitmapRegionDecoder.newInstance(pfd.getFileDescriptor(),false);if(decoder==null)return null;
+        try{
+            photoDescriptor=activity.getContentResolver().openFileDescriptor(uri,"r");
+            if(photoDescriptor==null)return null;
+            photoDecoder=android.graphics.BitmapRegionDecoder.newInstance(photoDescriptor.getFileDescriptor(),false);
+            if(photoDecoder==null){closePhotoDecoder();return null;}photoDecoderId=mediaId;return info;
+        }catch(Exception ex){android.util.Log.w("VastUi","Unable to open photo decoder",ex);closePhotoDecoder();return null;}
+    }
+
+    /** Decode only one source region so an 8K import never needs a second 8K Java bitmap. */
+    public static synchronized int[] photoTile(Activity activity,long mediaId,int left,int top,int right,int bottom,int sample){
+        android.graphics.Bitmap bitmap=null;
+        try{
+            if(photoDecoder==null||photoDecoderId!=mediaId){if(photoOpen(activity,mediaId,8192)==null)return null;}
             android.graphics.BitmapFactory.Options options=new android.graphics.BitmapFactory.Options();options.inSampleSize=Math.max(1,sample);options.inPreferredConfig=android.graphics.Bitmap.Config.ARGB_8888;
-            bitmap=decoder.decodeRegion(new android.graphics.Rect(left,top,right,bottom),options);if(bitmap==null)return null;int w=bitmap.getWidth(),h=bitmap.getHeight();
+            bitmap=photoDecoder.decodeRegion(new android.graphics.Rect(left,top,right,bottom),options);if(bitmap==null)return null;int w=bitmap.getWidth(),h=bitmap.getHeight();
             int[] result=new int[2+w*h];result[0]=w;result[1]=h;bitmap.getPixels(result,2,w,0,0,w,h);return result;
         }catch(Exception ex){android.util.Log.w("VastUi","Unable to decode photo region",ex);return null;}
-        finally{if(bitmap!=null)bitmap.recycle();if(decoder!=null)decoder.recycle();}
+        finally{if(bitmap!=null)bitmap.recycle();}
     }
+
+    public static synchronized void photoClose(){closePhotoDecoder();}
 
     private static Context themed(Activity activity, int background) {
         boolean light = Color.luminance(background | 0xff000000) > .45;
@@ -125,9 +148,17 @@ public final class VastUi {
     private static int surface(int background){return VastStyle.light(background)?0xeef6f4ef:0xec30353c;}
     private static int foreground(int background){return VastStyle.ink(background);}
     private static GradientDrawable surfaceDrawable(Context c,int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(c,14));d.setStroke(Math.max(1,dp(c,1)/2),(Color.luminance(color|0xff000000)>.45?0x1830363a:0x20e8e4dc));return d;}
-    private static void enter(View view,boolean panel){
-        view.animate().cancel();view.setAlpha(.55f);view.setTranslationY(dp(view.getContext(),panel?8:4));
-        view.animate().alpha(1).translationY(0).setDuration(panel?180:140).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+    private static final int MOTION_UP=1,MOTION_DOWN=2,MOTION_LEFT=3,MOTION_RIGHT=4;
+    private static float motionX(View view,int motion){int d=dp(view.getContext(),18);return motion==MOTION_LEFT?-d:motion==MOTION_RIGHT?d:0;}
+    private static float motionY(View view,int motion){int d=dp(view.getContext(),14);return motion==MOTION_UP?-d:motion==MOTION_DOWN?d:0;}
+    private static void enter(View view,int motion){
+        view.animate().cancel();view.setAlpha(.25f);view.setTranslationX(motionX(view,motion));view.setTranslationY(motionY(view,motion));
+        view.animate().alpha(1).translationX(0).translationY(0).setDuration(180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+    }
+    private static void exit(PopupWindow popup,int motion){
+        if(popup==null)return;View view=popup.getContentView();popup.setTouchable(false);view.animate().cancel();
+        view.animate().alpha(0).translationX(motionX(view,motion)).translationY(motionY(view,motion)).setDuration(150)
+            .setInterpolator(new android.view.animation.AccelerateInterpolator()).withEndAction(()->{try{popup.dismiss();}catch(Exception ignored){}}).start();
     }
     private static void rowAppearance(Button b,JSONObject row,int background){
         b.setContentDescription(row.optString("text"));
@@ -145,7 +176,7 @@ public final class VastUi {
         confirm.show();if(owner!=null)sizeDialog(confirm,owner,420,background);
     }
     private static void styleButton(Button b,int background){VastStyle.button(b,background);}
-    private static void dismissChrome(){if(header!=null)header.dismiss();if(identity!=null)identity.dismiss();if(rail!=null)rail.dismiss();if(contextTools!=null)contextTools.dismiss();if(toolPanel!=null)toolPanel.dismiss();header=identity=rail=contextTools=toolPanel=null;}
+    private static void dismissChrome(){PopupWindow h=header,i=identity,r=rail,c=contextTools,t=toolPanel;header=identity=rail=contextTools=toolPanel=null;exit(h,MOTION_UP);exit(i,MOTION_UP);exit(r,MOTION_LEFT);exit(c,MOTION_DOWN);exit(t,MOTION_RIGHT);}
     private static LinearLayout actionBar(Context c,JSONArray rows,int background,boolean vertical,boolean compact,boolean shortBar)throws Exception{
         LinearLayout bar=new LinearLayout(c);bar.setOrientation(vertical?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(c,6),dp(c,6),dp(c,6),dp(c,6));bar.setBackground(VastStyle.glass(c,background,vertical?26:38,false));
         for(int i=0;i<rows.length();i++){JSONObject row=rows.getJSONObject(i);int id=row.getInt("id");String title=row.getString("text");
@@ -157,12 +188,12 @@ public final class VastUi {
             b.setTooltipText(title);bar.addView(b,new LinearLayout.LayoutParams(vertical?-1:0,dp(c,vertical?50:shortBar?COMPACT_CHROME_DP-12:62),vertical?0:1));}
         return bar;
     }
-    private static PopupWindow popup(Activity a,View view,int width,int height,int gravity,int x,int y){
+    private static PopupWindow popup(Activity a,View view,int width,int height,int gravity,int x,int y,int motion){
         PopupWindow p=new PopupWindow(view,width,height,false);p.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));p.setOutsideTouchable(false);p.setTouchable(true);p.setElevation(dp(a,4));p.setClippingEnabled(true);
-        p.setAnimationStyle(0);p.setOnDismissListener(()->view.animate().cancel());p.showAtLocation(a.getWindow().getDecorView(),gravity,x,y);enter(view,false);return p;
+        p.setAnimationStyle(0);p.setOnDismissListener(()->view.animate().cancel());p.showAtLocation(a.getWindow().getDecorView(),gravity,x,y);enter(view,motion);return p;
     }
-    private static PopupWindow syncBar(Activity a,PopupWindow old,JSONArray rows,int background,boolean vertical,int width,int height,int gravity,int x,int y,boolean scrolling)throws Exception{
-        if(rows==null||rows.length()==0){if(old!=null)old.dismiss();return null;}
+    private static PopupWindow syncBar(Activity a,PopupWindow old,JSONArray rows,int background,boolean vertical,int width,int height,int gravity,int x,int y,boolean scrolling,int motion)throws Exception{
+        if(rows==null||rows.length()==0){exit(old,motion);return null;}
         String key=rows.toString()+":"+background+":"+width+":"+height;
         if(old!=null&&key.equals(old.getContentView().getTag()))return old;
         Context c=themed(a,background);LinearLayout bar=actionBar(c,rows,background,vertical,width<=dp(c,64),!vertical&&height==dp(c,COMPACT_CHROME_DP));
@@ -172,7 +203,7 @@ public final class VastUi {
             retained.setBackground(bar.getBackground());root.setTag(key);boolean expanded=old.getWidth()!=width;old.update(x,y,width,height);if(expanded){retained.setPivotX(0);retained.setScaleX(.94f);retained.animate().scaleX(1).setDuration(180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();}return old;
         }
         View root=bar;if(scrolling){ScrollView scroll=new ScrollView(c);scroll.setVerticalScrollBarEnabled(false);scroll.setFillViewport(false);scroll.addView(bar);root=scroll;}
-        root.setTag(key);return popup(a,root,width,height,gravity,x,y);
+        root.setTag(key);return popup(a,root,width,height,gravity,x,y,motion);
     }
     public static void showChrome(Activity a,String json,int background){
         requestHighRefresh(a);
@@ -184,16 +215,16 @@ public final class VastUi {
             if(state.optBoolean("hidden")){dismissChrome();return;}
             // Keep project context, not canvas branding. This View survives
             // pen DOWN/UP and undo-state updates; its entrance never restarts.
-            if(identity==null){TextView project=label(c,state.getString("project"),12);project.setPadding(dp(c,8),0,dp(c,8),0);project.setTextColor(foreground(background));identity=popup(a,project,dp(c,160),dp(c,32),Gravity.TOP|Gravity.LEFT,dp(c,16),dp(c,16));}
+            if(identity==null){TextView project=label(c,state.getString("project"),12);project.setPadding(dp(c,8),0,dp(c,8),0);project.setTextColor(foreground(background));identity=popup(a,project,dp(c,160),dp(c,32),Gravity.TOP|Gravity.LEFT,dp(c,16),dp(c,16),MOTION_UP);}
             else{TextView project=(TextView)identity.getContentView();project.setText(state.getString("project"));project.setTextColor(foreground(background));}
             boolean zen=state.optBoolean("zen");
             int screenWidth=a.getResources().getDisplayMetrics().widthPixels;
-            header=syncBar(a,header,zen?null:state.optJSONArray("header"),background,false,Math.min(dp(c,420),screenWidth-dp(c,32)),dp(c,COMPACT_CHROME_DP),Gravity.TOP|Gravity.RIGHT,dp(c,16),dp(c,12),false);
+            header=syncBar(a,header,zen?null:state.optJSONArray("header"),background,false,Math.min(dp(c,420),screenWidth-dp(c,32)),dp(c,COMPACT_CHROME_DP),Gravity.TOP|Gravity.RIGHT,dp(c,16),dp(c,12),false,MOTION_UP);
             JSONArray context=state.optJSONArray("context");
-            contextTools=syncBar(a,contextTools,zen?null:context,background,false,Math.min(dp(c,12+84*(context==null?0:context.length())),screenWidth-dp(c,32)),dp(c,74),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,dp(c,24),false);
-            toolPanel=syncBar(a,toolPanel,zen?null:state.optJSONArray("tool"),background,true,Math.min(dp(c,248),screenWidth-dp(c,32)),-2,Gravity.TOP|Gravity.RIGHT,dp(c,16),dp(c,12+COMPACT_CHROME_DP+16),false);
+            contextTools=syncBar(a,contextTools,zen?null:context,background,false,Math.min(dp(c,12+84*(context==null?0:context.length())),screenWidth-dp(c,32)),dp(c,74),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL,0,dp(c,24),false,MOTION_DOWN);
+            toolPanel=syncBar(a,toolPanel,zen?null:state.optJSONArray("tool"),background,true,Math.min(dp(c,248),screenWidth-dp(c,32)),-2,Gravity.TOP|Gravity.RIGHT,dp(c,16),dp(c,12+COMPACT_CHROME_DP+16),false,MOTION_RIGHT);
             boolean expanded=state.optBoolean("rail");JSONArray tray=new JSONArray(state.optJSONArray("tools").toString());JSONObject handle=new JSONObject();handle.put("id",5300);handle.put("text",expanded?"Collapse":"Expand");tray.put(handle);
-            rail=syncBar(a,rail,zen?null:tray,background,true,dp(c,expanded?152:COMPACT_CHROME_DP),Math.min(dp(c,462),a.getResources().getDisplayMetrics().heightPixels-dp(c,170)),Gravity.CENTER_VERTICAL|Gravity.LEFT,dp(c,12),0,true);
+            rail=syncBar(a,rail,zen?null:tray,background,true,dp(c,expanded?152:COMPACT_CHROME_DP),Math.min(dp(c,462),a.getResources().getDisplayMetrics().heightPixels-dp(c,170)),Gravity.CENTER_VERTICAL|Gravity.LEFT,dp(c,12),0,true,MOTION_LEFT);
         }catch(Exception ex){android.util.Log.e("VastUi","Unable to show canvas controls",ex);dismissChrome();}
     }
     private static PopupWindow colorPopup;
@@ -301,7 +332,7 @@ public final class VastUi {
         w.setBackgroundDrawable(VastStyle.glass(a,background,30,true));
         w.getDecorView().setElevation(dp(a,8));
         for(int id:new int[]{AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_NEUTRAL}){Button b=d.getButton(id);if(b!=null){styleButton(b,background);b.setSelected(id==AlertDialog.BUTTON_POSITIVE);}}
-        w.setWindowAnimations(0);enter(w.getDecorView(),true);
+        w.setWindowAnimations(0);enter(w.getDecorView(),MOTION_DOWN);
     }
     private static void closePanel() {
         if(panelDialog!=null){panelDialog.getWindow().getDecorView().animate().cancel();panelDialog.setOnCancelListener(null);panelDialog.dismiss();panelDialog=null;}
@@ -462,7 +493,7 @@ public final class VastUi {
                 .setNegativeButton("Close",(d,which)->nativeAction(close)).create();
             panelDialog.setOnCancelListener(d->nativeAction(close));panelDialog.show();sizeDialog(panelDialog,a,navigation.getChildCount()>0?800:560,background);}
             final int restore=oldScroll;scroll.post(()->scroll.scrollTo(0,restore));
-            if(sectionChanged)enter(body,false);
+            if(sectionChanged)enter(body,MOTION_RIGHT);
         }catch(Exception ex){android.util.Log.e("VastUi","Unable to show panel",ex);closePanel();}
     }
     public static void destroy(){closeColor(false,true);closeEditor();closePanel();dismissChrome();chromeKey="";owner=refreshOwner=null;}

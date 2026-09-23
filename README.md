@@ -1,6 +1,6 @@
-# Vast 3.2.16
+# Vast 3.2.17
 
-3.2.16 adds a persistent last-writing checkpoint with a conditional Return control, restores hidden canvas chrome when an empty area is touched, removes the one-finger touch-slop jump and derives fling from timestamped Android history, and imports photos at up to 8192 px per edge through bounded region decoding plus 2048 px GPU tiles. It also checks `imag0/Vast` for checksum-pinned, same-signer APK updates and always leaves final installation to Android and the user. See [RELEASE_3.2.16.md](RELEASE_3.2.16.md).
+3.2.17 keeps 8K photo work responsive by decoding and uploading one tile per frame, reusing one Android decoder session, and persisting ordinary photo transforms in a small metadata sidecar instead of rewriting the full pixel file. Hidden chrome now returns only after a completed empty-canvas tap, with the side rail compact; panning never reveals it. Native Android chrome slides in and out from its anchored edge. See [RELEASE_3.2.17.md](RELEASE_3.2.17.md).
 
 3.2.15 matched the top navigation pill height to the compact side rail width: both use one shared 60 dp dimension. Icons and spacing fit inside 48 dp native button targets; labels remain visible. The tool tray retains its 16 dp gap below the shorter header.
 
@@ -145,7 +145,7 @@ Missing, truncated, corrupt, wrong-project, wrong-index or wrong-model sidecars 
 
 These design properties are covered by source and APK inspection. Airplane-mode behavior still requires the manual Android acceptance run below.
 
-## Build 3.2.16
+## Build 3.2.17
 
 This remains the existing direct native/custom-APK build. It does not use Gradle or CMake.
 
@@ -168,12 +168,12 @@ Outputs:
 
 ```text
 build/libcanvas.so
-dist/Vast-v3.2.16-unsigned.apk
-dist/Vast-v3.2.16.apk
-dist/Vast-v3.2.16-source.zip
+dist/Vast-v3.2.17-unsigned.apk
+dist/Vast-v3.2.17.apk
+dist/Vast-v3.2.17-source.zip
 ```
 
-`tools/build_v2.py` refuses to package a model, dictionary, inference configuration, ORT library or license whose pinned SHA-256 does not match. It emits version 3.2.16/code 51, normalizes ZIP metadata for reproducible output with the same inputs/signing identity, and performs its own APK Signature Scheme v2 digest, signer, certificate and public-key verification after writing the APK. Preserve `build/v2-key.pem` and `build/v2-cert.der` when an update-compatible signing identity is required; do not distribute the private key in a source archive.
+`tools/build_v2.py` refuses to package a model, dictionary, inference configuration, ORT library or license whose pinned SHA-256 does not match. It emits version 3.2.17/code 52, normalizes ZIP metadata for reproducible output with the same inputs/signing identity, and performs its own APK Signature Scheme v2 digest, signer, certificate and public-key verification after writing the APK. Preserve `build/v2-key.pem` and `build/v2-cert.der` when an update-compatible signing identity is required; do not distribute the private key in a source archive.
 
 `tools/package_source.py` creates the source ZIP deterministically, writes a per-file SHA-256 manifest inside it, verifies ZIP integrity/unique names, and excludes generated build/dist/test data, executables and signing secrets.
 

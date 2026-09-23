@@ -1,4 +1,4 @@
-"""Create a deterministic Vast 3.2.16 source bundle without signing secrets."""
+"""Create a deterministic Vast 3.2.17 source bundle without signing secrets."""
 
 import hashlib
 import zipfile
@@ -6,13 +6,13 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "dist" / "Vast-v3.2.16-source.zip"
-PREFIX = "Vast-v3.2.16-source/"
+OUTPUT = ROOT / "dist" / "Vast-v3.2.17-source.zip"
+PREFIX = "Vast-v3.2.17-source/"
 FIXED_TIME = (2026, 9, 23, 0, 0, 0)
 EXCLUDED_TOP_LEVEL = {"artifacts", "build", "dist", "testdata30", "testdata_canvas_ocr"}
 EXCLUDED_DIRS = {".git", ".vs", "__pycache__", ".pytest_cache"}
 INCLUDED_TOP_LEVEL_FILES = {
-    "RELEASE_3.2.16.md", "RELEASE_3.2.14.md", "UI_REVIEW_3.2.14.md",
+    "RELEASE_3.2.17.md", "RELEASE_3.2.16.md", "RELEASE_3.2.14.md", "UI_REVIEW_3.2.14.md",
     "build-native.sh", "README.md", "IMPLEMENTATION_REPORT.md", "RELEASE_3.2.10.md", "RELEASE_3.2.11.md", "RELEASE_3.2.12.md", "RELEASE_3.2.13.md", "MENU_REVIEW.md", "UI_REVIEW_3.2.12.md",
     "THIRD_PARTY_NOTICES.md", "test_canvas_ocr.c", "test_ocr.c",
     "test_ppocr_recognizer.c", "test_v30.c",

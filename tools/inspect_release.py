@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APK = ROOT / "dist" / "Vast-v3.2.16.apk"
+APK = ROOT / "dist" / "Vast-v3.2.17.apk"
 BASELINE = ROOT / "artifacts" / "baseline" / "Vast-v3.2.7-baseline.apk"
 BASELINE_SIZE = 173264
 CERT = ROOT / "build" / "v2-cert.der"
@@ -218,8 +218,8 @@ def main():
 
     expected = {
         "package": "com.ayomi.infinitecanvas",
-        "versionCode": 51,
-        "versionName": "3.2.16",
+        "versionCode": 52,
+        "versionName": "3.2.17",
         "minSdkVersion": 26,
         "targetSdkVersion": 36,
     }
