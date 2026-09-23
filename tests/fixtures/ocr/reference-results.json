@@ -1,0 +1,42 @@
+{
+  "zh_engine": {
+    "source_text": "发动机",
+    "width": 230,
+    "height": 85,
+    "recognized": "发动机",
+    "confidence": 0.9998571077982584,
+    "input_name": "x",
+    "output_name": "fetch_name_0",
+    "input_width": 320
+  },
+  "zh_school": {
+    "source_text": "明天去学校",
+    "width": 377,
+    "height": 86,
+    "recognized": "明天去学校",
+    "confidence": 0.999813687801361,
+    "input_name": "x",
+    "output_name": "fetch_name_0",
+    "input_width": 320
+  },
+  "en_terms": {
+    "source_text": "engine pressure navigation",
+    "width": 778,
+    "height": 80,
+    "recognized": "engine Pressure navigation",
+    "confidence": 0.9500552943119636,
+    "input_name": "x",
+    "output_name": "fetch_name_0",
+    "input_width": 466
+  },
+  "mixed": {
+    "source_text": "Engine 发动机",
+    "width": 426,
+    "height": 85,
+    "recognized": "Engine发动机",
+    "confidence": 0.9925941758685641,
+    "input_name": "x",
+    "output_name": "fetch_name_0",
+    "input_width": 320
+  }
+}

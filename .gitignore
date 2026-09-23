@@ -1,0 +1,16 @@
+/build/
+/dist/
+/artifacts/
+/testdata30/
+/testdata_canvas_ocr/
+/.pytest_cache/
+/**/__pycache__/
+*.pyc
+*.exe
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+local.properties
+.env
