@@ -1,4 +1,6 @@
-# Vast 3.2.17
+# Vast 3.2.18
+
+3.2.18 adds a confirmed **Clear project** action and a separate **Erase everything** stylus tool. Clear project removes every document object from the current project while preserving the project slot and its name. Erase everything removes unlocked ink, highlighter, photos, dimensions, text, shapes, and frame borders along the stylus path as one undoable gesture; finger input remains navigation-only. See [RELEASE_3.2.18.md](RELEASE_3.2.18.md).
 
 3.2.17 keeps 8K photo work responsive by decoding and uploading one tile per frame, reusing one Android decoder session, and persisting ordinary photo transforms in a small metadata sidecar instead of rewriting the full pixel file. Hidden chrome now returns only after a completed empty-canvas tap, with the side rail compact; panning never reveals it. Native Android chrome slides in and out from its anchored edge. See [RELEASE_3.2.17.md](RELEASE_3.2.17.md).
 
@@ -7,7 +9,7 @@
 Vast 3.2.14 introduces a shared translucent design system for real Android controls: unified navigation and selection pills, an icon rail with expandable labels, coordinated panels and editors, and curved radial petals. Native input behavior, retained drawing, controlled fling and fully local handwriting search remain. See [RELEASE_3.2.14.md](RELEASE_3.2.14.md) and [UI_REVIEW_3.2.14.md](UI_REVIEW_3.2.14.md) for implementation and screenshot review; [RELEASE_3.2.13.md](RELEASE_3.2.13.md) records inertial navigation.
 
 Package: `com.ayomi.infinitecanvas`  
-Version code: 51
+Version code: 53
 Target SDK: 36  
 Minimum SDK: 26  
 ABI: arm64-v8a
@@ -145,7 +147,7 @@ Missing, truncated, corrupt, wrong-project, wrong-index or wrong-model sidecars 
 
 These design properties are covered by source and APK inspection. Airplane-mode behavior still requires the manual Android acceptance run below.
 
-## Build 3.2.17
+## Build 3.2.18
 
 This remains the existing direct native/custom-APK build. It does not use Gradle or CMake.
 
@@ -168,12 +170,12 @@ Outputs:
 
 ```text
 build/libcanvas.so
-dist/Vast-v3.2.17-unsigned.apk
-dist/Vast-v3.2.17.apk
-dist/Vast-v3.2.17-source.zip
+dist/Vast-v3.2.18-unsigned.apk
+dist/Vast-v3.2.18.apk
+dist/Vast-v3.2.18-source.zip
 ```
 
-`tools/build_v2.py` refuses to package a model, dictionary, inference configuration, ORT library or license whose pinned SHA-256 does not match. It emits version 3.2.17/code 52, normalizes ZIP metadata for reproducible output with the same inputs/signing identity, and performs its own APK Signature Scheme v2 digest, signer, certificate and public-key verification after writing the APK. Preserve `build/v2-key.pem` and `build/v2-cert.der` when an update-compatible signing identity is required; do not distribute the private key in a source archive.
+`tools/build_v2.py` refuses to package a model, dictionary, inference configuration, ORT library or license whose pinned SHA-256 does not match. It emits version 3.2.18/code 53, normalizes ZIP metadata for reproducible output with the same inputs/signing identity, and performs its own APK Signature Scheme v2 digest, signer, certificate and public-key verification after writing the APK. Preserve `build/v2-key.pem` and `build/v2-cert.der` when an update-compatible signing identity is required; do not distribute the private key in a source archive.
 
 `tools/package_source.py` creates the source ZIP deterministically, writes a per-file SHA-256 manifest inside it, verifies ZIP integrity/unique names, and excludes generated build/dist/test data, executables and signing secrets.
 

@@ -170,9 +170,10 @@ public final class VastUi {
         int id=row.optInt("id");
         if(id==5400&&owner!=null){VastUpdater.check(owner,background,true);return;}
         if(!row.optString("kind").equals("danger")){nativeAction(id);return;}
+        boolean clear=row.optString("text").toLowerCase(java.util.Locale.ROOT).startsWith("clear");
         AlertDialog confirm=new AlertDialog.Builder(c).setCustomTitle(VastStyle.title(c,row.optString("text")+"?",background))
-            .setMessage("This action cannot be undone.").setNegativeButton("Cancel",null)
-            .setPositiveButton("Delete",(d,which)->nativeAction(id)).create();
+            .setMessage(clear?"This removes all content from the current project and cannot be undone.":"This action cannot be undone.").setNegativeButton("Cancel",null)
+            .setPositiveButton(clear?"Clear":"Delete",(d,which)->nativeAction(id)).create();
         confirm.show();if(owner!=null)sizeDialog(confirm,owner,420,background);
     }
     private static void styleButton(Button b,int background){VastStyle.button(b,background);}

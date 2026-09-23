@@ -1,8 +1,8 @@
 {
-  "versionCode": 52,
-  "versionName": "3.2.17",
-  "apkUrl": "https://raw.githubusercontent.com/imag0/Vast/main/releases/Vast-v3.2.17.apk",
-  "sha256": "14fd42dda714c8e47f9be221668f6ef033016708d8ca5557c9403ad4b4e21951",
+  "versionCode": 53,
+  "versionName": "3.2.18",
+  "apkUrl": "https://raw.githubusercontent.com/imag0/Vast/main/releases/Vast-v3.2.18.apk",
+  "sha256": "4a5582ef02b0e34d98e6b617c49223e316fa31e415cccac38f1edf7e84c9a532",
   "minimumSdk": 26,
   "publishedAt": "2026-09-23T00:00:00Z"
 }

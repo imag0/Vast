@@ -769,8 +769,32 @@ static void test_eraser_contact_ownership(void){
     stylus_event(&e,AMOTION_ACTION_UP,100,750,450);handle_motion((AInputEvent*)&e);
     input_check(!G.strokes[0].active&&G.actionN==1&&G.actions[0].n==1,"eraser gesture commits a single undo action");undo_action();input_check(G.strokes[0].active,"normal undo restores erased ink");
 }
+static void seed_universal_eraser_fixture(void){
+    ensure_strokes(1);G.strokeN=1;memset(G.strokes,0,sizeof(Stroke));G.strokes[0].active=1;append_point(&G.strokes[0],100,100,.7f);append_point(&G.strokes[0],150,100,.7f);
+    G.noteN=1;G.notes[0]=(NoteObj){90,90,120,80,0,1,1,NOTE_TEXT,0,{0}};
+    G.shapeN=1;G.shapes[0]=(ShapeObj){90,100,160,100,0,4,1,1,SHAPE_LINE,0};
+    G.imageN=1;G.images[0]=(ImageObj){0,1,1,90,90,120,80,0,0,1};
+    G.measureN=1;G.measures[0]=(Measure){90,100,160,100,1};
+    G.frameN=1;G.frames[0]=(FrameObj){100,80,140,100,0,1,1};
+    erase_index_reset();
+}
+static int universal_fixture_active(void){return G.strokes[0].active&&G.notes[0].active&&G.shapes[0].active&&G.images[0].active&&G.measures[0].active&&G.frames[0].active;}
+static void test_universal_eraser(void){
+    FakeEvent e;input_defaults();G.tool=MODE_ERASE_ALL;seed_universal_eraser_fixture();
+    stylus_event(&e,AMOTION_ACTION_DOWN,201,100,100);handle_motion((AInputEvent*)&e);
+    input_check(!G.strokes[0].active&&!G.notes[0].active&&!G.shapes[0].active&&!G.images[0].active&&!G.measures[0].active&&!G.frames[0].active,"erase-everything contact removes every unlocked canvas object class");
+    stylus_event(&e,AMOTION_ACTION_CANCEL,201,100,100);handle_motion((AInputEvent*)&e);
+    input_check(universal_fixture_active()&&G.actionN==0,"erase-everything CANCEL restores every object without history");
+    stylus_event(&e,AMOTION_ACTION_DOWN,202,100,100);handle_motion((AInputEvent*)&e);stylus_event(&e,AMOTION_ACTION_UP,202,100,100);handle_motion((AInputEvent*)&e);
+    input_check(G.actionN==1&&G.actions[0].type==ACT_ERASE_ALL&&G.actions[0].n==1&&G.actions[0].refN==5,"erase-everything gesture commits one mixed-object undo action");
+    undo_action();input_check(universal_fixture_active(),"undo restores everything erased by the universal eraser");
+    redo_action();input_check(!G.strokes[0].active&&!G.notes[0].active&&!G.shapes[0].active&&!G.images[0].active&&!G.measures[0].active&&!G.frames[0].active,"redo removes the same mixed-object gesture again");
+    undo_action();G.notes[0].locked=1;G.tool=MODE_ERASE_ALL;stylus_event(&e,AMOTION_ACTION_DOWN,203,100,100);handle_motion((AInputEvent*)&e);stylus_event(&e,AMOTION_ACTION_UP,203,100,100);handle_motion((AInputEvent*)&e);
+    input_check(G.notes[0].active,"erase-everything preserves a locked object");
+}
 int main(void) {
     test_eraser_contact_ownership();
+    test_universal_eraser();
     test_ui_commit_contract();
     test_camera_cancel_rollback();
     test_camera_fling();
